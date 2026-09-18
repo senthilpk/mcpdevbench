@@ -311,7 +311,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   plugins: [vue({})],
   resolve: { alias: { '@': new URL('./src', import.meta.url).pathname } },
-  test: { environment: 'jsdom', exclude: ['tests/e2e/**', '**/node_modules/**', '**/.git/**'] }
+  test: { environment: 'jsdom', exclude: ['tests/e2e/**', '.worktrees/**', '**/node_modules/**', '**/.git/**'] }
 });
 ```
 
@@ -578,7 +578,7 @@ export default defineConfig({
   resolve: { alias: { '@': new URL('./src', import.meta.url).pathname } },
   test: {
     environment: 'jsdom',
-    exclude: ['tests/e2e/**', '**/node_modules/**', '**/.git/**'],
+    exclude: ['tests/e2e/**', '.worktrees/**', '**/node_modules/**', '**/.git/**'],
     setupFiles: ['tests/setup/renderer.ts']
   }
 });

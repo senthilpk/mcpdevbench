@@ -6,7 +6,12 @@ export default defineConfig({
   resolve: { alias: { '@': new URL('./src', import.meta.url).pathname } },
   test: {
     environment: 'jsdom',
-    exclude: ['tests/e2e/**', '**/node_modules/**', '**/.git/**'],
+    exclude: [
+      'tests/e2e/**',
+      '.worktrees/**',
+      '**/node_modules/**',
+      '**/.git/**',
+    ],
     setupFiles: ['tests/setup/renderer.ts'],
   },
 });
