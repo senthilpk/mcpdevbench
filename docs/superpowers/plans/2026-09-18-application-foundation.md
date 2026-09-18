@@ -92,7 +92,8 @@ Run:
 
 ```bash
 npm init -y
-npm pkg set name=mcpdevbench productName=MCPDevBench version=0.1.0 private=true main=.vite/build/main.js
+npm pkg set name=mcpdevbench productName=MCPDevBench version=0.1.0 main=.vite/build/main.js
+npm pkg set private=true --json
 npm pkg set scripts.start="electron-forge start" scripts.package="electron-forge package" scripts.make="electron-forge make" scripts.typecheck="vue-tsc --noEmit -p tsconfig.renderer.json && tsc --noEmit -p tsconfig.main.json" scripts.test="vitest run" scripts.test:watch="vitest" scripts.test:e2e="playwright test"
 ```
 
@@ -104,7 +105,7 @@ Run:
 
 ```bash
 npm install --save-exact vue vue-router pinia zod
-npm install --save-dev --save-exact electron @electron-forge/cli @electron-forge/plugin-vite @electron-forge/maker-zip @electron-forge/maker-squirrel @electron-forge/maker-deb @electron-forge/maker-rpm vite @vitejs/plugin-vue typescript vue-tsc vitest jsdom @vue/test-utils @playwright/test
+npm install --save-dev --save-exact electron @electron-forge/cli @electron-forge/plugin-vite @electron-forge/maker-zip @electron-forge/maker-squirrel @electron-forge/maker-deb @electron-forge/maker-rpm vite @vitejs/plugin-vue typescript@5.9.3 vue-tsc vitest jsdom @vue/test-utils @playwright/test
 ```
 
 Expected: direct dependency versions contain no `^` or `~`, and `package-lock.json` exists.
