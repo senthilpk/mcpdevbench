@@ -6,5 +6,6 @@ export default defineConfig({
   resolve: { alias: { '@': new URL('./src', import.meta.url).pathname } },
   test: {
     environment: 'jsdom',
+    setupFiles: ['tests/setup/renderer.ts'],
   },
 });
