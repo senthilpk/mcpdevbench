@@ -38,7 +38,7 @@
 ├── vite.main.config.ts             Main-process bundle configuration
 ├── vite.preload.config.ts          Sandboxed preload bundle configuration
 ├── vite.renderer.config.ts         Vue renderer bundle configuration
-├── vitest.config.ts                Unit/component test configuration
+├── vitest.config.mts               Unit/component test configuration
 ├── src/
 │   ├── main/
 │   │   ├── app/create-main-window.ts  Secure BrowserWindow construction
@@ -265,7 +265,7 @@ git commit -m "build: configure Electron Forge and Vue toolchain"
 - Create: `src/shared/contracts/health.ts`
 - Create: `src/main/health/get-health.ts`
 - Create: `tests/main/get-health.test.ts`
-- Create: `vitest.config.ts`
+- Create: `vitest.config.mts`
 
 **Interfaces:**
 - Consumes: Zod and Vitest from Task 1.
@@ -288,7 +288,7 @@ describe('getHealth', () => {
 });
 ```
 
-Create `vitest.config.ts`:
+Create `vitest.config.mts`:
 
 ```ts
 import vue from '@vitejs/plugin-vue';
@@ -353,7 +353,7 @@ Expected: PASS with one test.
 - [ ] **Step 5: Commit the shared contract**
 
 ```bash
-git add src/shared src/main/health tests/main/get-health.test.ts vitest.config.ts
+git add src/shared src/main/health tests/main/get-health.test.ts vitest.config.mts
 git commit -m "feat: add typed application health contract"
 ```
 
@@ -517,7 +517,7 @@ git commit -m "feat: add secure Electron process boundary"
 - Create: `src/renderer/features/dashboard/DashboardView.vue`
 - Create: `tests/setup/renderer.ts`
 - Create: `tests/renderer/App.test.ts`
-- Modify: `vitest.config.ts`
+- Modify: `vitest.config.mts`
 
 **Interfaces:**
 - Consumes: `window.mcpdevbench.getHealth()` from Task 3.
@@ -552,7 +552,7 @@ Object.defineProperty(window, 'mcpdevbench', {
 });
 ```
 
-Update `vitest.config.ts` so renderer tests load the browser API stub:
+Update `vitest.config.mts` so renderer tests load the browser API stub:
 
 ```ts
 import vue from '@vitejs/plugin-vue';
@@ -703,7 +703,7 @@ Expected: PASS with no TypeScript errors.
 - [ ] **Step 7: Commit the Vue shell**
 
 ```bash
-git add src/renderer tests/renderer tests/setup vitest.config.ts
+git add src/renderer tests/renderer tests/setup vitest.config.mts
 git commit -m "feat: add MCPDevBench desktop shell"
 ```
 
