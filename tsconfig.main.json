@@ -7,10 +7,12 @@
   },
   "include": [
     "src/main/**/*.ts",
+    "src/main.ts",
     "src/preload/**/*.ts",
+    "src/preload.ts",
     "src/shared/**/*.ts",
     "forge.config.ts",
-    "vite.*.config.ts",
+    "vite.*.config.mts",
     "vitest.config.mts",
     "playwright.config.ts"
   ]

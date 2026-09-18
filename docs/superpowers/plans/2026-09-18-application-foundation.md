@@ -35,11 +35,13 @@
 ├── tsconfig.json                   Shared strict TypeScript settings
 ├── tsconfig.main.json              Main and preload type-checking boundary
 ├── tsconfig.renderer.json          Vue renderer type-checking boundary
-├── vite.main.config.ts             Main-process bundle configuration
-├── vite.preload.config.ts          Sandboxed preload bundle configuration
-├── vite.renderer.config.ts         Vue renderer bundle configuration
+├── vite.main.config.mts            Main-process bundle configuration
+├── vite.preload.config.mts         Sandboxed preload bundle configuration
+├── vite.renderer.config.mts        Vue renderer bundle configuration
 ├── vitest.config.mts               Unit/component test configuration
 ├── src/
+│   ├── main.ts                    Forge main entry shim
+│   ├── preload.ts                 Forge preload entry shim
 │   ├── main/
 │   │   ├── app/create-main-window.ts  Secure BrowserWindow construction
 │   │   ├── app/lifecycle.ts           Electron lifecycle orchestration
@@ -73,13 +75,15 @@
 - Create: `package.json`
 - Create: `package-lock.json`
 - Create: `forge.config.ts`
-- Create: `vite.main.config.ts`
-- Create: `vite.preload.config.ts`
-- Create: `vite.renderer.config.ts`
+- Create: `vite.main.config.mts`
+- Create: `vite.preload.config.mts`
+- Create: `vite.renderer.config.mts`
 - Create: `tsconfig.json`
 - Create: `tsconfig.main.json`
 - Create: `tsconfig.renderer.json`
 - Create: `index.html`
+- Create: `src/main.ts`
+- Create: `src/preload.ts`
 - Create: `.gitignore`
 
 **Interfaces:**
@@ -144,7 +148,7 @@ Create `tsconfig.main.json`:
     "moduleResolution": "NodeNext",
     "types": ["node", "electron"]
   },
-  "include": ["src/main/**/*.ts", "src/preload/**/*.ts", "src/shared/**/*.ts", "forge.config.ts", "vite.*.config.ts", "vitest.config.ts", "playwright.config.ts"]
+  "include": ["src/main.ts", "src/main/**/*.ts", "src/preload.ts", "src/preload/**/*.ts", "src/shared/**/*.ts", "forge.config.ts", "vite.*.config.mts", "vitest.config.mts", "playwright.config.ts"]
 }
 ```
 
@@ -180,10 +184,10 @@ const config: ForgeConfig = {
   plugins: [
     new VitePlugin({
       build: [
-        { entry: 'src/main/index.ts', config: 'vite.main.config.ts' },
-        { entry: 'src/preload/api.ts', config: 'vite.preload.config.ts' }
+        { entry: 'src/main.ts', config: 'vite.main.config.mts', target: 'main' },
+        { entry: 'src/preload.ts', config: 'vite.preload.config.mts', target: 'preload' }
       ],
-      renderer: [{ name: 'main_window', config: 'vite.renderer.config.ts' }]
+      renderer: [{ name: 'main_window', config: 'vite.renderer.config.mts' }]
     })
   ]
 };
@@ -191,26 +195,34 @@ const config: ForgeConfig = {
 export default config;
 ```
 
-Create `vite.main.config.ts` and `vite.preload.config.ts`:
+Create `vite.main.config.mts` and `vite.preload.config.mts`:
 
 ```ts
 import { defineConfig } from 'vite';
-import path from 'node:path';
 
-export default defineConfig({ resolve: { alias: { '@': path.resolve(__dirname, 'src') } } });
+export default defineConfig({ resolve: { alias: { '@': new URL('./src', import.meta.url).pathname } } });
 ```
 
-Create `vite.renderer.config.ts`:
+Create `vite.renderer.config.mts`:
 
 ```ts
 import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vite';
-import path from 'node:path';
 
 export default defineConfig({
   plugins: [vue({})],
-  resolve: { alias: { '@': path.resolve(__dirname, 'src') } }
+  resolve: { alias: { '@': new URL('./src', import.meta.url).pathname } }
 });
+```
+
+Create entry shims whose basenames produce Forge's expected `main.js` and `preload.js` bundles:
+
+```ts
+// src/main.ts
+import '@/main/index';
+
+// src/preload.ts
+import '@/preload/api';
 ```
 
 Create `index.html`:
@@ -256,7 +268,7 @@ Expected: FAIL only because application entry files from later tasks do not exis
 - [ ] **Step 6: Commit the build foundation**
 
 ```bash
-git add .gitignore package.json package-lock.json forge.config.ts vite.main.config.ts vite.preload.config.ts vite.renderer.config.ts tsconfig.json tsconfig.main.json tsconfig.renderer.json index.html
+git add .gitignore package.json package-lock.json forge.config.ts vite.main.config.mts vite.preload.config.mts vite.renderer.config.mts tsconfig.json tsconfig.main.json tsconfig.renderer.json index.html src/main.ts src/preload.ts
 git commit -m "build: configure Electron Forge and Vue toolchain"
 ```
 
@@ -299,7 +311,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   plugins: [vue({})],
   resolve: { alias: { '@': new URL('./src', import.meta.url).pathname } },
-  test: { environment: 'jsdom' }
+  test: { environment: 'jsdom', exclude: ['tests/e2e/**', '**/node_modules/**', '**/.git/**'] }
 });
 ```
 
@@ -409,7 +421,7 @@ Expected: FAIL because `create-main-window.ts` does not exist.
 Create `src/main/app/create-main-window.ts`:
 
 ```ts
-import { BrowserWindow, type BrowserWindowConstructorOptions } from 'electron';
+import type { BrowserWindow as BrowserWindowInstance, BrowserWindowConstructorOptions } from 'electron';
 import path from 'node:path';
 
 export const createMainWindowOptions = (preloadPath: string): BrowserWindowConstructorOptions => ({
@@ -422,7 +434,8 @@ export const createMainWindowOptions = (preloadPath: string): BrowserWindowConst
   webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true }
 });
 
-export const createMainWindow = (): BrowserWindow => {
+export const createMainWindow = (): BrowserWindowInstance => {
+  const { BrowserWindow } = require('electron') as typeof import('electron');
   const window = new BrowserWindow(createMainWindowOptions(path.join(__dirname, 'preload.js')));
   window.once('ready-to-show', () => window.show());
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) void window.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
@@ -565,6 +578,7 @@ export default defineConfig({
   resolve: { alias: { '@': new URL('./src', import.meta.url).pathname } },
   test: {
     environment: 'jsdom',
+    exclude: ['tests/e2e/**', '**/node_modules/**', '**/.git/**'],
     setupFiles: ['tests/setup/renderer.ts']
   }
 });
