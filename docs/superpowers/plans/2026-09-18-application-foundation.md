@@ -195,8 +195,9 @@ Create `vite.main.config.ts` and `vite.preload.config.ts`:
 
 ```ts
 import { defineConfig } from 'vite';
+import path from 'node:path';
 
-export default defineConfig({ resolve: { alias: { '@': new URL('./src', import.meta.url).pathname } } });
+export default defineConfig({ resolve: { alias: { '@': path.resolve(__dirname, 'src') } } });
 ```
 
 Create `vite.renderer.config.ts`:
@@ -204,10 +205,11 @@ Create `vite.renderer.config.ts`:
 ```ts
 import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vite';
+import path from 'node:path';
 
 export default defineConfig({
-  plugins: [vue()],
-  resolve: { alias: { '@': new URL('./src', import.meta.url).pathname } }
+  plugins: [vue({})],
+  resolve: { alias: { '@': path.resolve(__dirname, 'src') } }
 });
 ```
 
@@ -295,9 +297,9 @@ import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue({})],
   resolve: { alias: { '@': new URL('./src', import.meta.url).pathname } },
-  test: { environment: 'node', environmentMatchGlobs: [['tests/renderer/**', 'jsdom']] }
+  test: { environment: 'jsdom' }
 });
 ```
 
@@ -559,11 +561,10 @@ import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue({})],
   resolve: { alias: { '@': new URL('./src', import.meta.url).pathname } },
   test: {
-    environment: 'node',
-    environmentMatchGlobs: [['tests/renderer/**', 'jsdom']],
+    environment: 'jsdom',
     setupFiles: ['tests/setup/renderer.ts']
   }
 });

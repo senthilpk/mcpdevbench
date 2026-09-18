@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
+import path from 'node:path';
 
 export default defineConfig({
-  resolve: { alias: { '@': new URL('./src', import.meta.url).pathname } },
+  resolve: { alias: { '@': path.resolve(__dirname, 'src') } },
 });
