@@ -1,13 +1,13 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import type { ServerSummary } from '@/renderer/components/domain/ServerTable.vue';
+import type { ServerRow } from '@/renderer/features/servers/use-server-workspace';
 import ServerTable from '@/renderer/components/domain/ServerTable.vue';
 
-const servers: ServerSummary[] = [
-  { id: 'tveyes', name: 'TVEyes Local', transport: 'STDIO', tools: 12, state: 'connected' as const },
-  { id: 'search', name: 'Search MCP', transport: 'HTTP', tools: 8, state: 'idle' as const },
-  { id: 'analytics', name: 'Analytics', transport: 'HTTP', tools: 4, state: 'degraded' as const },
-  { id: 'broken', name: 'Broken Fixture', transport: 'STDIO', tools: 0, state: 'error' as const },
+const servers: ServerRow[] = [
+  { id: 'tveyes', name: 'TVEyes Local', transport: 'STDIO', tools: 12, state: 'connected', connectionId: 'c1' },
+  { id: 'search', name: 'Search MCP', transport: 'HTTP', tools: 8, state: 'idle' },
+  { id: 'analytics', name: 'Analytics', transport: 'HTTP', tools: 4, state: 'degraded' },
+  { id: 'broken', name: 'Broken Fixture', transport: 'STDIO', tools: 0, state: 'error' },
 ];
 
 describe('ServerTable', () => {
@@ -20,9 +20,9 @@ describe('ServerTable', () => {
     }
   });
 
-  it('renders an accessible empty state without an active command', () => {
+  it('renders an accessible empty state with an active add command', () => {
     const wrapper = mount(ServerTable, { props: { servers: [] } });
     expect(wrapper.get('[data-testid="empty-servers"]').text()).toContain('No servers configured');
-    expect(wrapper.find('button').exists()).toBe(false);
+    expect(wrapper.get('button').text()).toContain('Add server');
   });
 });

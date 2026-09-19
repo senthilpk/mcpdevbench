@@ -1,19 +1,20 @@
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import DashboardView from '@/renderer/features/dashboard/DashboardView.vue';
 
 describe('DashboardView', () => {
-  it('renders metrics and demonstration servers', () => {
+  it('renders live empty metrics without demonstration servers', async () => {
     const wrapper = mount(DashboardView);
+    await flushPromises();
     expect(wrapper.get('h2').text()).toBe('Servers');
-    expect(wrapper.text()).toContain('24');
-    expect(wrapper.text()).toContain('TVEyes Local');
+    expect(wrapper.text()).toContain('0 configured');
+    expect(wrapper.text()).not.toContain('TVEyes Local');
   });
 
-  it('marks Add server unavailable instead of exposing a dead action', () => {
+  it('exposes Add server as an active command', async () => {
     const wrapper = mount(DashboardView);
-    const button = wrapper.get('button[disabled]');
-    expect(button.attributes('aria-describedby')).toBe('add-server-unavailable');
-    expect(wrapper.get('#add-server-unavailable').text()).toContain('available with connection setup');
+    await flushPromises();
+    expect(wrapper.get('button').text()).toContain('Add server');
+    expect(wrapper.find('button[disabled]').exists()).toBe(false);
   });
 });
