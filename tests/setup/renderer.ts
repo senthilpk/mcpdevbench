@@ -7,5 +7,13 @@ Object.defineProperty(window, 'mcpdevbench', {
       status: 'ready',
       app: 'MCPDevBench',
     }),
+    listProfiles: vi.fn().mockResolvedValue([]),
+    saveProfile: vi.fn(),
+    deleteProfile: vi.fn(),
+    listConnections: vi.fn().mockResolvedValue([]),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    refresh: vi.fn(),
+    onConnectionsChanged: vi.fn().mockReturnValue(vi.fn()),
   },
 });
