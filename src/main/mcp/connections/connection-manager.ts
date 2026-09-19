@@ -325,6 +325,10 @@ export class ConnectionManager {
     } catch (error) {
       probeError = error;
     }
+    // A disconnect may have landed while the probe's connect() was in flight: `closeConnection`
+    // already closed `probeClient` (the session's client at that point) and removed the session,
+    // and nothing below has reserved the coordinator yet, so there is nothing to release.
+    if (session.closed) return;
 
     if (probeError instanceof McpCimdUnsupportedError) {
       throw new AuthorizationFailureSignal(
@@ -352,10 +356,21 @@ export class ConnectionManager {
         },
       });
     } catch (error) {
+      // Nothing was reserved (the call itself threw), so a concurrent disconnect leaves
+      // nothing to release either -- just don't surface a failure for an already-dismissed session.
+      if (session.closed) return;
       if (error instanceof AuthorizationAttemptError) throw new AuthorizationFailureSignal(...mapAttemptErrorCode(error));
       throw error;
     }
     const { provider, completion } = attempt;
+
+    if (session.closed) {
+      // Disconnected while the coordinator's slot was being reserved: nobody will ever drive
+      // this attempt to a browser/finishAuth, so release the global lock immediately instead
+      // of leaving it held for up to the coordinator's timeout.
+      await authService.cancelAuthorization(connectionId).catch(() => {});
+      return;
+    }
 
     const interactiveClient = this.createClient(session.profile, provider);
     clientBox.current = interactiveClient;
@@ -366,15 +381,25 @@ export class ConnectionManager {
       // Unexpected but not impossible (e.g. another process authorized this resource
       // concurrently): treat as an immediate success and release the unused reservation.
       await authService.cancelAuthorization(connectionId).catch(() => {});
+      if (session.closed) return;
       this.update(session, { authorization: this.authorizationSnapshot('authorized') });
       return;
     } catch (error) {
+      if (session.closed) {
+        await authService.cancelAuthorization(connectionId).catch(() => {});
+        return;
+      }
       if (!(error instanceof McpAuthorizationRequiredError)) {
         throw new AuthorizationFailureSignal(
-          'authorization_browser_failed',
-          'The system browser could not be opened for authorization.',
+          'authorization_attempt_failed',
+          'The authorization attempt failed unexpectedly; Connect can retry.',
         );
       }
+    }
+
+    if (session.closed) {
+      await authService.cancelAuthorization(connectionId).catch(() => {});
+      return;
     }
 
     this.update(session, { state: 'authorizing', authorization: this.authorizationSnapshot('waiting') });
@@ -387,6 +412,7 @@ export class ConnectionManager {
       const finalClient = this.createClient(session.profile, provider);
       session.client = finalClient;
       await finalClient.connect();
+      if (session.closed) return;
       this.update(session, { authorization: this.authorizationSnapshot('authorized') });
       return;
     }

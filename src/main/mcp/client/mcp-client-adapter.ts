@@ -97,11 +97,7 @@ export class McpClientAdapter implements McpClientPort {
     try {
       await this.bundle.client.connect(this.bundle.transport);
     } catch (error) {
-      if (error instanceof UnauthorizedError) throw new McpAuthorizationRequiredError();
-      if (error instanceof Error && error.message === CIMD_UNSUPPORTED_MESSAGE) {
-        throw new McpCimdUnsupportedError();
-      }
-      throw error;
+      throw mapSdkAuthError(error);
     }
   }
 
@@ -109,7 +105,14 @@ export class McpClientAdapter implements McpClientPort {
     if (!this.bundle.finishAuth) {
       throw new Error('finishAuthorization is only supported for streamable-http connections with an authorization provider');
     }
-    await this.bundle.finishAuth(params);
+    // `transport.finishAuth()` itself throws the SDK's own `UnauthorizedError("Failed to
+    // authorize")` on a failed code exchange -- this adapter is the sole SDK-error boundary,
+    // so that must be converted here too, not left to whatever happens to catch it upstream.
+    try {
+      await this.bundle.finishAuth(params);
+    } catch (error) {
+      throw mapSdkAuthError(error);
+    }
   }
 
   async close(): Promise<void> {
@@ -172,4 +175,16 @@ function parseHttpUrl(value: string): URL {
     throw new Error('HTTP profile URL must use http or https');
   }
   return url;
+}
+
+/**
+ * The single place that recognizes the SDK's own `UnauthorizedError` (thrown both from
+ * `client.connect()` on a 401 and from `transport.finishAuth()` on a failed code exchange)
+ * and the CIMD-unsupported message, converting either to this adapter's branded errors.
+ * Any other error is returned unchanged.
+ */
+function mapSdkAuthError(error: unknown): unknown {
+  if (error instanceof UnauthorizedError) return new McpAuthorizationRequiredError();
+  if (error instanceof Error && error.message === CIMD_UNSUPPORTED_MESSAGE) return new McpCimdUnsupportedError();
+  return error;
 }

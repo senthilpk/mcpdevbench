@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ConnectionManager, type AuthorizationService } from '@/main/mcp/connections/connection-manager';
 import { McpAuthorizationRequiredError, McpCimdUnsupportedError, type McpClientFactory, type McpClientPort } from '@/main/mcp/client/mcp-client-port';
-import { AuthorizationAttemptError, type AuthorizationAttemptOutcome } from '@/main/oauth/oauth-coordinator';
+import {
+  AuthorizationAttemptError,
+  type AuthorizationAttemptOutcome,
+  type BeginInteractiveAttemptResult,
+} from '@/main/oauth/oauth-coordinator';
 import type { ProfileStore } from '@/main/profiles/profile-store';
 import type { ServerProfile } from '@/shared/domain/servers';
 
@@ -323,11 +327,11 @@ describe('ConnectionManager OAuth', () => {
     });
   });
 
-  it('maps an unexpected failure opening the interactive attempt to authorization_browser_failed', async () => {
+  it('maps an unexpected failure opening the interactive attempt to a neutral authorization_attempt_failed, without blaming the browser for an unverified cause', async () => {
     const probeClient = createClient();
     vi.mocked(probeClient.connect).mockRejectedValue(new McpAuthorizationRequiredError());
     const interactiveClient = createClient();
-    vi.mocked(interactiveClient.connect).mockRejectedValue(new Error('spawn failed: could not open system browser'));
+    vi.mocked(interactiveClient.connect).mockRejectedValue(new Error('network reset while re-discovering protected-resource metadata'));
     const factory = queuedFactory(probeClient, interactiveClient);
     const authService = createAuthService({
       beginInteractiveAttempt: vi.fn().mockResolvedValue({ provider: {} as never, completion: new Promise(() => {}) }),
@@ -336,8 +340,47 @@ describe('ConnectionManager OAuth', () => {
 
     await manager.connect('p3');
     await vi.waitFor(() => expect(manager.list()[0]?.state).toBe('failed'));
-    expect(manager.list()[0]?.failure?.code).toBe('authorization_browser_failed');
-    expect(manager.list()[0]?.failure?.message).not.toContain('spawn failed');
+    expect(manager.list()[0]?.failure?.code).toBe('authorization_attempt_failed');
+    expect(manager.list()[0]?.failure?.message).not.toContain('network reset');
+    expect(manager.list()[0]?.failure?.message.toLowerCase()).not.toContain('browser');
+  });
+
+  it('releases an orphaned coordinator reservation when disconnect lands before the interactive attempt is registered', async () => {
+    const probeClient = createClient();
+    vi.mocked(probeClient.connect).mockRejectedValue(new McpAuthorizationRequiredError());
+    const interactiveClient = createClient();
+    vi.mocked(interactiveClient.connect).mockRejectedValue(new McpAuthorizationRequiredError());
+    const factory = queuedFactory(probeClient, interactiveClient);
+
+    const beginInteractiveAttemptDeferred = deferred<BeginInteractiveAttemptResult>();
+    const cancelCalls: string[] = [];
+    const authService = createAuthService({
+      beginInteractiveAttempt: vi.fn().mockReturnValue(beginInteractiveAttemptDeferred.promise),
+      cancelAuthorization: vi.fn(async (connectionId: string) => { cancelCalls.push(connectionId); }),
+    });
+    const manager = new ConnectionManager(createStore(oauthProfiles), factory, authService);
+
+    const started = await manager.connect('p3');
+    // Disconnect lands while still `authorization-required` -- BEFORE `beginInteractiveAttempt`
+    // has resolved, i.e. before the coordinator has actually registered the attempt.
+    await vi.waitFor(() => expect(manager.list()[0]?.state).toBe('authorization-required'));
+
+    const disconnectPromise = manager.disconnect(started.connectionId);
+
+    // The coordinator now finishes reserving its slot for a connection the user already dismissed.
+    const completionDeferred = deferred<AuthorizationAttemptOutcome>();
+    beginInteractiveAttemptDeferred.resolve({ provider: {} as never, completion: completionDeferred.promise });
+
+    await disconnectPromise;
+
+    // Two releases are expected: `closeConnection`'s own (a no-op on a real coordinator, since
+    // no attempt was registered yet) and the one issued once the now-resolved attempt is seen
+    // to belong to an already-closed session -- the second one is the actual fix.
+    await vi.waitFor(() => {
+      expect(cancelCalls.filter((id) => id === started.connectionId).length).toBeGreaterThanOrEqual(2);
+    });
+    // The orphaned attempt must never be driven any further: no browser-opening connect for it.
+    expect(interactiveClient.connect).not.toHaveBeenCalled();
   });
 
   it('cancelAuthorization delegates to the coordinator and settles the owning connection as disconnected', async () => {

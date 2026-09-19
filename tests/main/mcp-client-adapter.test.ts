@@ -119,6 +119,17 @@ describe('McpClientAdapter', () => {
     expect(finishAuth).toHaveBeenCalledWith(params);
   });
 
+  it('converts an SDK UnauthorizedError thrown by transport.finishAuth into the branded error, not the raw SDK error', async () => {
+    const finishAuth = vi.fn().mockRejectedValue(new UnauthorizedError('Failed to authorize'));
+    const client = fakeSdkClient();
+    const deps: AdapterDependencies = {
+      create: () => ({ client, transport: {} as never, finishAuth }),
+    };
+    const adapter = new McpClientAdapter({ id: 'p1', name: 'x', transport: 'streamable-http', url: 'https://example.test/mcp' }, deps, {} as never);
+    await expect(adapter.finishAuthorization(new URLSearchParams({ code: 'abc' })))
+      .rejects.toBeInstanceOf(McpAuthorizationRequiredError);
+  });
+
   it('rejects finishAuthorization when the bundle has no finishAuth (e.g. no provider was supplied)', async () => {
     const client = fakeSdkClient();
     const deps: AdapterDependencies = { create: () => ({ client, transport: {} as never }) };
