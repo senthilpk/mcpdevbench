@@ -84,6 +84,22 @@ describe('SecretStore', () => {
     await expect(store.read()).resolves.toBeUndefined();
   });
 
+  it('a read issued right after an unawaited write observes the write, not stale data', async () => {
+    const fs = fakeFileSystem();
+    const slowWriteFile = vi.fn(async (path: string, data: string) => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      fs.files.set(path, data);
+    });
+    const deps = makeDeps({ readFile: fs.readFile, writeFile: slowWriteFile, rename: fs.rename });
+    const store = new SecretStore('/oauth/secrets.json', deps);
+
+    const writePromise = store.write(JSON.stringify({ accessToken: 'fresh' }));
+    const readResult = await store.read();
+
+    expect(JSON.parse(readResult ?? 'null')).toEqual({ accessToken: 'fresh' });
+    await writePromise;
+  });
+
   it('never writes the plaintext token or verifier to disk', async () => {
     const fs = fakeFileSystem();
     const deps = makeDeps({ readFile: fs.readFile, writeFile: fs.writeFile, rename: fs.rename });

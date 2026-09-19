@@ -134,6 +134,27 @@ describe('OAuthRecordStore', () => {
     expect(await store.getDiscoveryState(RESOURCE) !== undefined).toBe(expected.hasDiscovery);
   });
 
+  it('invalidating the active issuer leaves other issuers under the same resource untouched', async () => {
+    const store = new OAuthRecordStore(fakeSecretStore());
+    await store.saveClientInformation(RESOURCE, ISSUER_A, clientInfo('client-a'));
+    await store.saveTokens(RESOURCE, ISSUER_A, tokens('token-a'));
+    // Issuer B is saved last, so it becomes the active issuer.
+    await store.saveClientInformation(RESOURCE, ISSUER_B, clientInfo('client-b'));
+    await store.saveTokens(RESOURCE, ISSUER_B, tokens('token-b'));
+
+    await store.invalidate(RESOURCE, 'client');
+    await store.invalidate(RESOURCE, 'tokens');
+
+    const grants = await store.getGrants(RESOURCE);
+    const grantA = grants.find((g) => g.issuer === new URL(ISSUER_A).toString());
+    const grantB = grants.find((g) => g.issuer === new URL(ISSUER_B).toString());
+
+    expect(grantB?.clientInformation).toBeUndefined();
+    expect(grantB?.tokens).toBeUndefined();
+    expect(grantA?.clientInformation?.client_id).toBe('client-a');
+    expect(grantA?.tokens?.access_token).toBe('token-a');
+  });
+
   it('clearResource removes every grant for that resource only', async () => {
     const store = new OAuthRecordStore(fakeSecretStore());
     await store.saveTokens(RESOURCE, ISSUER_A, tokens('token-a'));
@@ -158,5 +179,25 @@ describe('OAuthRecordStore', () => {
 
     await expect(store.getTokens(RESOURCE)).rejects.toBeInstanceOf(OAuthStorageError);
     await expect(store.saveTokens(RESOURCE, ISSUER_A, tokens('t'))).rejects.toBeInstanceOf(OAuthStorageError);
+  });
+
+  it('a read issued right after an unawaited write observes the write, not stale data', async () => {
+    const delayedSecretStore: SecretStoreLike & { value: string | undefined } = {
+      value: undefined,
+      async read() {
+        return this.value;
+      },
+      async write(value: string) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        this.value = value;
+      },
+    };
+    const store = new OAuthRecordStore(delayedSecretStore);
+
+    const writePromise = store.saveTokens(RESOURCE, ISSUER_A, tokens('fresh'));
+    const result = await store.getTokens(RESOURCE, ISSUER_A);
+
+    expect(result?.access_token).toBe('fresh');
+    await writePromise;
   });
 });

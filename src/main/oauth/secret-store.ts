@@ -57,6 +57,10 @@ export class SecretStore implements SecretStoreLike {
   }
 
   async read(): Promise<string | undefined> {
+    // Wait for any write already enqueued before this call so a read issued
+    // right after an unawaited write never observes stale/missing data.
+    await this.writeQueue;
+
     if (this.mode === 'session-only') return this.memoryValue;
 
     let raw: string;

@@ -66,7 +66,7 @@ export class OAuthRecordStore {
   constructor(private readonly secretStore: SecretStoreLike) {}
 
   async getClientInformation(resourceUrl: string, issuer?: string): Promise<StoredOAuthClientInformation | undefined> {
-    const document = await this.loadDocument();
+    const document = await this.readDocument();
     return this.resolveIssuerRecord(document, resourceUrl, issuer)?.clientInformation;
   }
 
@@ -84,7 +84,7 @@ export class OAuthRecordStore {
   }
 
   async getTokens(resourceUrl: string, issuer?: string): Promise<StoredOAuthTokens | undefined> {
-    const document = await this.loadDocument();
+    const document = await this.readDocument();
     return this.resolveIssuerRecord(document, resourceUrl, issuer)?.tokens;
   }
 
@@ -98,7 +98,7 @@ export class OAuthRecordStore {
   }
 
   async getCodeVerifier(resourceUrl: string): Promise<string | undefined> {
-    const document = await this.loadDocument();
+    const document = await this.readDocument();
     return document.resources[canonicalize(resourceUrl)]?.codeVerifier;
   }
 
@@ -109,7 +109,7 @@ export class OAuthRecordStore {
   }
 
   async getDiscoveryState(resourceUrl: string): Promise<OAuthDiscoveryState | undefined> {
-    const document = await this.loadDocument();
+    const document = await this.readDocument();
     return document.resources[canonicalize(resourceUrl)]?.discoveryState;
   }
 
@@ -144,7 +144,7 @@ export class OAuthRecordStore {
   }
 
   async getGrants(resourceUrl: string): Promise<OAuthGrantRecord[]> {
-    const document = await this.loadDocument();
+    const document = await this.readDocument();
     const resource = document.resources[canonicalize(resourceUrl)];
     if (!resource) return [];
     return Object.values(resource.issuers).map((issuerRecord) => ({ ...issuerRecord }));
@@ -166,6 +166,19 @@ export class OAuthRecordStore {
     const issuerKey = issuer !== undefined ? canonicalize(issuer) : resource.activeIssuer;
     if (issuerKey === undefined) return undefined;
     return resource.issuers[issuerKey];
+  }
+
+  /**
+   * Reads the document for a public getter. Waits for any write already
+   * enqueued before this call so a read issued right after an unawaited
+   * write never observes stale data (mirrors `JsonProfileStore.list()`).
+   * Must not be used from inside `mutate()` itself -- that would deadlock,
+   * since `mutationQueue` is reassigned synchronously before the mutating
+   * operation runs.
+   */
+  private async readDocument(): Promise<OAuthDocument> {
+    await this.mutationQueue;
+    return this.loadDocument();
   }
 
   private async loadDocument(): Promise<OAuthDocument> {
