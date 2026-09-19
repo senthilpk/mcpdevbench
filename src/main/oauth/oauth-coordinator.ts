@@ -110,6 +110,15 @@ export class OAuthCoordinator {
       finishAuth: input.finishAuth,
     };
 
+    // Reserve the slot synchronously, before any `await` below. Everything from the
+    // busy-check above to this assignment runs in one uninterrupted synchronous stretch
+    // (nothing here is awaited), so a second call issued before this call's first `await`
+    // can never observe `this.active === undefined` and slip past the busy-check too.
+    // `attempt` already has a real `provider`/`server` at this point (only `authorizationUrl`
+    // is still unset), so `reopenAuthorization`/`cancelAuthorization` behave correctly even
+    // if invoked during the brief window before the listener has finished binding.
+    this.active = attempt;
+
     const { ready, outcome } = server.start({
       getExpectedState: () => provider.expectedState(),
       timeoutMs: input.timeoutMs ?? this.defaultTimeoutMs,
@@ -118,6 +127,11 @@ export class OAuthCoordinator {
     try {
       await ready;
     } catch (error) {
+      // Roll back the reservation -- a failed bind must not leave the coordinator
+      // permanently "busy".
+      if (this.active === attempt) {
+        this.active = undefined;
+      }
       throw new AuthorizationAttemptError(
         'callback_port_unavailable',
         'The OAuth loopback callback port is unavailable.',
@@ -125,7 +139,6 @@ export class OAuthCoordinator {
       );
     }
 
-    this.active = attempt;
     const completion = outcome.then((result) => this.handleOutcome(attempt, result));
 
     return { provider, completion };

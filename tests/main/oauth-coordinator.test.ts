@@ -200,7 +200,7 @@ describe('OAuthCoordinator', () => {
     expect(instances[0]?.cancelSpy).not.toHaveBeenCalled();
   });
 
-  it('fails a second concurrent interactive attempt with a stable authorization_busy error, leaving the first untouched', async () => {
+  it('fails a second sequential interactive attempt with a stable authorization_busy error, leaving the first untouched', async () => {
     const callLog: string[] = [];
     const { createCallbackServer, instances } = createFakeServerFactory(callLog);
     const openBrowser = createOpenBrowser(callLog);
@@ -230,6 +230,120 @@ describe('OAuthCoordinator', () => {
     expect(instances).toHaveLength(1);
     expect(instances[0]?.stopSpy).not.toHaveBeenCalled();
     expect(instances[0]?.cancelSpy).not.toHaveBeenCalled();
+  });
+
+  it('reserves the attempt slot synchronously, so a second call issued before the first is awaited also fails busy (true concurrency, not just sequential reuse)', async () => {
+    const callLog: string[] = [];
+    const { createCallbackServer, instances } = createFakeServerFactory(callLog);
+    const openBrowser = createOpenBrowser(callLog);
+    const coordinator = new OAuthCoordinator({ openBrowser, createCallbackServer });
+
+    // Deliberately NOT awaited before the second call: both promises are created back to
+    // back, so if the busy-check-then-reserve weren't atomic, both calls could pass the
+    // check before either finishes binding.
+    const firstPromise = coordinator.beginInteractiveAttempt({
+      connectionId: 'conn-1',
+      resourceUrl: RESOURCE_URL,
+      recordStore: fakeRecordStore(),
+      finishAuth: vi.fn().mockResolvedValue(undefined),
+    });
+    const secondPromise = coordinator.beginInteractiveAttempt({
+      connectionId: 'conn-2',
+      resourceUrl: RESOURCE_URL,
+      recordStore: fakeRecordStore(),
+      finishAuth: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const first = await firstPromise;
+    let secondError: unknown;
+    try {
+      await secondPromise;
+    } catch (error) {
+      secondError = error;
+    }
+
+    expect(first.provider).toBeDefined();
+    expect(secondError).toBeInstanceOf(AuthorizationAttemptError);
+    expect((secondError as AuthorizationAttemptError).code).toBe('authorization_busy');
+    // Only one callback server was ever created -- the second call never got as far as
+    // constructing its own server/provider.
+    expect(instances).toHaveLength(1);
+  });
+
+  it('rolls back the busy reservation when the bind fails, so a subsequent attempt is not stuck busy', async () => {
+    const callLog: string[] = [];
+    let callCount = 0;
+    const createCallbackServer = (): CallbackServerLike => {
+      callCount += 1;
+      const shouldFail = callCount === 1;
+      return {
+        start: () =>
+          shouldFail
+            ? { ready: Promise.reject(new Error('EADDRINUSE')), outcome: Promise.resolve({ ok: false, reason: 'bind_error' }) }
+            : { ready: Promise.resolve(), outcome: new Promise<CallbackOutcome>(() => {}) },
+        cancel: vi.fn(),
+        stop: vi.fn().mockResolvedValue(undefined),
+      };
+    };
+    const openBrowser = createOpenBrowser(callLog);
+    const coordinator = new OAuthCoordinator({ openBrowser, createCallbackServer });
+
+    await expect(
+      coordinator.beginInteractiveAttempt({
+        connectionId: 'conn-1',
+        resourceUrl: RESOURCE_URL,
+        recordStore: fakeRecordStore(),
+        finishAuth: vi.fn().mockResolvedValue(undefined),
+      }),
+    ).rejects.toMatchObject({ code: 'callback_port_unavailable' });
+
+    // Not stuck "busy": a fresh attempt right after a failed bind must not throw authorization_busy.
+    const retry = await coordinator.beginInteractiveAttempt({
+      connectionId: 'conn-2',
+      resourceUrl: RESOURCE_URL,
+      recordStore: fakeRecordStore(),
+      finishAuth: vi.fn().mockResolvedValue(undefined),
+    });
+    expect(retry.provider).toBeDefined();
+  });
+
+  it('reopenAuthorization rejects when no authorization URL has been produced yet', async () => {
+    const callLog: string[] = [];
+    const { createCallbackServer } = createFakeServerFactory(callLog);
+    const openBrowser = createOpenBrowser(callLog);
+    const coordinator = new OAuthCoordinator({ openBrowser, createCallbackServer });
+
+    await coordinator.beginInteractiveAttempt({
+      connectionId: 'conn-1',
+      resourceUrl: RESOURCE_URL,
+      recordStore: fakeRecordStore(),
+      finishAuth: vi.fn().mockResolvedValue(undefined),
+    });
+
+    await expect(coordinator.reopenAuthorization('conn-1')).rejects.toBeInstanceOf(AuthorizationAttemptError);
+    expect(openBrowser).not.toHaveBeenCalled();
+  });
+
+  it('cancelAuthorization is safe to call twice for the same attempt', async () => {
+    const callLog: string[] = [];
+    const { createCallbackServer, instances } = createFakeServerFactory(callLog);
+    const openBrowser = createOpenBrowser(callLog);
+    const coordinator = new OAuthCoordinator({ openBrowser, createCallbackServer });
+
+    const { completion } = await coordinator.beginInteractiveAttempt({
+      connectionId: 'conn-1',
+      resourceUrl: RESOURCE_URL,
+      recordStore: fakeRecordStore(),
+      finishAuth: vi.fn().mockResolvedValue(undefined),
+    });
+
+    await coordinator.cancelAuthorization('conn-1');
+    await completion;
+
+    // The attempt is gone after cancellation completes; a second cancel for the same
+    // (now stale) connection id must fail cleanly rather than resurrecting/corrupting state.
+    await expect(coordinator.cancelAuthorization('conn-1')).rejects.toBeInstanceOf(AuthorizationAttemptError);
+    expect(instances[0]?.cancelSpy).toHaveBeenCalledTimes(1);
   });
 
   it('calls finishAuth with the callback params on a successful outcome, then cleans up', async () => {
