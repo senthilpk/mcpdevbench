@@ -55,10 +55,27 @@ const catalogSchema = <T extends z.ZodType>(item: T) => z.discriminatedUnion('st
   z.object({ status: z.literal('failed'), items: z.tuple([]), message: z.string() }).strict(),
 ]);
 
+export const authorizationSnapshotSchema = z.object({
+  status: z.enum(['required', 'waiting', 'completing', 'authorized']),
+  storage: z.enum(['persistent', 'session-only']),
+  canReopenBrowser: z.boolean(),
+  canCancel: z.boolean(),
+  warning: z.string().optional(),
+}).strict();
+
+export const signOutResultSchema = z.object({
+  localCredentialsRemoved: z.literal(true),
+  revocation: z.enum(['revoked', 'unavailable', 'failed']),
+  warning: z.string().optional(),
+}).strict();
+
 export const connectionSnapshotSchema = z.object({
   connectionId: z.string().min(1),
   profileId: z.string().min(1),
-  state: z.enum(['connecting', 'initializing', 'discovering', 'ready', 'closing', 'disconnected', 'failed']),
+  state: z.enum([
+    'connecting', 'initializing', 'discovering', 'ready', 'closing', 'disconnected', 'failed',
+    'authorization-required', 'authorizing', 'completing-authorization',
+  ]),
   serverName: z.string().optional(),
   serverVersion: z.string().optional(),
   protocolVersion: z.string().optional(),
@@ -68,6 +85,7 @@ export const connectionSnapshotSchema = z.object({
   resourceTemplates: catalogSchema(resourceTemplateSummarySchema),
   prompts: catalogSchema(promptSummarySchema),
   failure: z.object({ code: z.string(), message: z.string() }).strict().optional(),
+  authorization: authorizationSnapshotSchema.optional(),
 }).strict();
 
 export const serverProfilesSchema = z.array(serverProfileSchema);
@@ -82,4 +100,16 @@ export const serverChannels = {
   disconnect: 'servers:disconnect',
   refresh: 'servers:refresh',
   connectionsChanged: 'servers:connections:changed',
+  reopenAuthorization: 'servers:authorization:reopen',
+  cancelAuthorization: 'servers:authorization:cancel',
+  signOut: 'servers:sign-out',
 } as const;
+
+export const reopenAuthorizationRequestSchema = z.string().min(1);
+export const reopenAuthorizationResponseSchema = connectionSnapshotSchema;
+
+export const cancelAuthorizationRequestSchema = z.string().min(1);
+export const cancelAuthorizationResponseSchema = connectionSnapshotSchema;
+
+export const signOutRequestSchema = z.string().min(1);
+export const signOutResponseSchema = signOutResultSchema;

@@ -16,6 +16,7 @@ export type ServerRow = {
 const stateMap: Record<ConnectionSnapshot['state'], StatusState> = {
   connecting: 'connecting', initializing: 'connecting', discovering: 'connecting',
   ready: 'connected', closing: 'disconnecting', disconnected: 'idle', failed: 'error',
+  'authorization-required': 'connecting', authorizing: 'connecting', 'completing-authorization': 'connecting',
 };
 
 export function useServerWorkspace() {

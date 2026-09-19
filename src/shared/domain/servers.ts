@@ -24,7 +24,26 @@ export type ConnectionState =
   | 'ready'
   | 'closing'
   | 'disconnected'
-  | 'failed';
+  | 'failed'
+  | 'authorization-required'
+  | 'authorizing'
+  | 'completing-authorization';
+
+export type AuthorizationStorage = 'persistent' | 'session-only';
+
+export type AuthorizationSnapshot = {
+  status: 'required' | 'waiting' | 'completing' | 'authorized';
+  storage: AuthorizationStorage;
+  canReopenBrowser: boolean;
+  canCancel: boolean;
+  warning?: string | undefined;
+};
+
+export type SignOutResult = {
+  localCredentialsRemoved: true;
+  revocation: 'revoked' | 'unavailable' | 'failed';
+  warning?: string | undefined;
+};
 
 export type CatalogSnapshot<T> =
   | { status: 'unsupported'; items: [] }
@@ -68,4 +87,5 @@ export type ConnectionSnapshot = {
   resourceTemplates: CatalogSnapshot<ResourceTemplateSummary>;
   prompts: CatalogSnapshot<PromptSummary>;
   failure?: { code: string; message: string } | undefined;
+  authorization?: AuthorizationSnapshot | undefined;
 };
