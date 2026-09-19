@@ -19,6 +19,8 @@ export class ConnectionManager {
   private readonly sessions = new Map<string, Session>();
   private readonly connectionByProfile = new Map<string, string>();
   private readonly pendingByProfile = new Map<string, Promise<ConnectionSnapshot>>();
+  private readonly pendingDisconnects = new Map<string, Promise<ConnectionSnapshot>>();
+  private readonly disconnected = new Map<string, ConnectionSnapshot>();
   private readonly subscribers = new Set<Subscriber>();
 
   constructor(
@@ -42,11 +44,29 @@ export class ConnectionManager {
 
     const operation = this.startConnection(profileId, active);
     this.pendingByProfile.set(profileId, operation);
-    void operation.finally(() => this.pendingByProfile.delete(profileId));
+    void operation.then(
+      () => this.pendingByProfile.delete(profileId),
+      () => this.pendingByProfile.delete(profileId),
+    );
     return operation;
   }
 
-  async disconnect(connectionId: string): Promise<ConnectionSnapshot> {
+  disconnect(connectionId: string): Promise<ConnectionSnapshot> {
+    const completed = this.disconnected.get(connectionId);
+    if (completed) return Promise.resolve(structuredClone(completed));
+    const pending = this.pendingDisconnects.get(connectionId);
+    if (pending) return pending;
+
+    const operation = this.closeConnection(connectionId);
+    this.pendingDisconnects.set(connectionId, operation);
+    void operation.then(
+      () => this.pendingDisconnects.delete(connectionId),
+      () => this.pendingDisconnects.delete(connectionId),
+    );
+    return operation;
+  }
+
+  private async closeConnection(connectionId: string): Promise<ConnectionSnapshot> {
     const session = this.requireSession(connectionId);
     session.closed = true;
     this.update(session, { state: 'closing', failure: undefined });
@@ -60,6 +80,7 @@ export class ConnectionManager {
       this.sessions.delete(connectionId);
     }
     const snapshot: ConnectionSnapshot = { ...session.snapshot, state: 'disconnected', failure };
+    this.disconnected.set(connectionId, structuredClone(snapshot));
     this.publish();
     return structuredClone(snapshot);
   }
@@ -89,6 +110,8 @@ export class ConnectionManager {
     await Promise.allSettled(ids.map((id) => this.disconnect(id)));
     this.sessions.clear();
     this.connectionByProfile.clear();
+    this.pendingDisconnects.clear();
+    this.disconnected.clear();
     this.publish();
   }
 

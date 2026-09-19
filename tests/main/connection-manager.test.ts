@@ -73,6 +73,23 @@ describe('ConnectionManager', () => {
     await expect(manager.refresh('missing')).rejects.toThrow('Connection not found');
   });
 
+  it('makes repeated disconnects idempotent', async () => {
+    const client = createClient();
+    const manager = new ConnectionManager(createStore(), () => client);
+    const started = await manager.connect('p1');
+    await vi.waitFor(() => expect(manager.list()[0]?.state).toBe('ready'));
+
+    const [first, second] = await Promise.all([
+      manager.disconnect(started.connectionId),
+      manager.disconnect(started.connectionId),
+    ]);
+    const third = await manager.disconnect(started.connectionId);
+
+    expect(first).toEqual(second);
+    expect(second).toEqual(third);
+    expect(client.close).toHaveBeenCalledTimes(1);
+  });
+
   it('closes every client during shutdown', async () => {
     const allClients = [createClient(), createClient()];
     const pendingClients = [...allClients];
