@@ -1,10 +1,19 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
+import ApplicationStatus, {
+  type ApplicationState,
+} from '@/renderer/components/domain/ApplicationStatus.vue';
 
-const ready = ref(false);
+const applicationState = ref<ApplicationState>('starting');
 
 onMounted(async () => {
-  ready.value = (await window.mcpdevbench.getHealth()).status === 'ready';
+  try {
+    applicationState.value = (await window.mcpdevbench.getHealth()).status === 'ready'
+      ? 'ready'
+      : 'unavailable';
+  } catch {
+    applicationState.value = 'unavailable';
+  }
 });
 </script>
 
@@ -18,9 +27,7 @@ onMounted(async () => {
     </aside>
     <main class="workspace">
       <div class="topbar">
-        <span data-testid="app-status" class="status">
-          {{ ready ? 'Ready' : 'Starting' }}
-        </span>
+        <ApplicationStatus data-testid="app-status" :state="applicationState" />
       </div>
       <RouterView />
     </main>
