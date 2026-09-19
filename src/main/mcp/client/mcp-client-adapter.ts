@@ -1,10 +1,17 @@
 import {
   Client,
   StreamableHTTPClientTransport,
+  UnauthorizedError,
+  type OAuthClientProvider,
   type Transport,
 } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
-import type { McpClientPort, McpServerMetadata } from '@/main/mcp/client/mcp-client-port';
+import {
+  McpAuthorizationRequiredError,
+  McpCimdUnsupportedError,
+  type McpClientPort,
+  type McpServerMetadata,
+} from '@/main/mcp/client/mcp-client-port';
 import type {
   PromptSummary,
   ResourceSummary,
@@ -12,6 +19,17 @@ import type {
   ServerProfile,
   ToolSummary,
 } from '@/shared/domain/servers';
+
+/**
+ * The exact message the SDK's `auth()` throws when an authorization server does not
+ * advertise CIMD support and this application's provider cannot fall back to Dynamic
+ * Client Registration (it never implements `saveClientInformation`). The SDK does not
+ * export a dedicated error class or code for this case, so matching on the message is
+ * the only available signal.
+ * ponytail: fragile message-matching; if the SDK ever adds a dedicated error class or
+ * `OAuthErrorCode` for "CIMD unsupported, no DCR fallback", switch to checking that instead.
+ */
+const CIMD_UNSUPPORTED_MESSAGE = 'OAuth client information must be saveable for dynamic registration';
 
 type SdkClientLike = {
   connect(transport: Transport): Promise<void>;
@@ -26,20 +44,25 @@ type SdkClientLike = {
   listPrompts(): Promise<{ prompts: Array<{ name: string; description?: string | undefined; arguments?: Array<{ name: string; description?: string | undefined; required?: boolean | undefined }> | undefined }> }>;
 };
 
+type FinishAuth = (params: URLSearchParams) => Promise<void>;
+
 type AdapterBundle = {
   client: SdkClientLike;
   transport: Transport;
   terminateSession?: (() => Promise<void>) | undefined;
+  /** Only present for `streamable-http` bundles constructed with an `authProvider`. */
+  finishAuth?: FinishAuth | undefined;
 };
 
 export type AdapterDependencies = {
-  create(profile: ServerProfile): AdapterBundle;
+  create(profile: ServerProfile, authProvider?: OAuthClientProvider): AdapterBundle;
 };
 
 const defaultDependencies: AdapterDependencies = {
-  create(profile) {
+  create(profile, authProvider) {
     const client = new Client({ name: 'MCPDevBench', version: '0.1.0' }, { listMaxPages: 64 });
     if (profile.transport === 'stdio') {
+      // `authProvider` is intentionally never read here -- STDIO transports never receive one.
       const transport = new StdioClientTransport({
         command: profile.command,
         args: profile.args,
@@ -48,21 +71,45 @@ const defaultDependencies: AdapterDependencies = {
       return { client, transport };
     }
     const url = parseHttpUrl(profile.url);
-    const transport = new StreamableHTTPClientTransport(url);
-    return { client, transport, terminateSession: () => transport.terminateSession() };
+    const transport = new StreamableHTTPClientTransport(url, authProvider ? { authProvider } : undefined);
+    return {
+      client,
+      transport,
+      terminateSession: () => transport.terminateSession(),
+      finishAuth: authProvider ? (params: URLSearchParams) => transport.finishAuth(params) : undefined,
+    };
   },
 };
 
 export class McpClientAdapter implements McpClientPort {
   private readonly bundle: AdapterBundle;
 
-  constructor(profile: ServerProfile, dependencies: AdapterDependencies = defaultDependencies) {
+  constructor(
+    profile: ServerProfile,
+    dependencies: AdapterDependencies = defaultDependencies,
+    authProvider?: OAuthClientProvider,
+  ) {
     if (profile.transport === 'streamable-http') parseHttpUrl(profile.url);
-    this.bundle = dependencies.create(profile);
+    this.bundle = dependencies.create(profile, profile.transport === 'streamable-http' ? authProvider : undefined);
   }
 
   async connect(): Promise<void> {
-    await this.bundle.client.connect(this.bundle.transport);
+    try {
+      await this.bundle.client.connect(this.bundle.transport);
+    } catch (error) {
+      if (error instanceof UnauthorizedError) throw new McpAuthorizationRequiredError();
+      if (error instanceof Error && error.message === CIMD_UNSUPPORTED_MESSAGE) {
+        throw new McpCimdUnsupportedError();
+      }
+      throw error;
+    }
+  }
+
+  async finishAuthorization(params: URLSearchParams): Promise<void> {
+    if (!this.bundle.finishAuth) {
+      throw new Error('finishAuthorization is only supported for streamable-http connections with an authorization provider');
+    }
+    await this.bundle.finishAuth(params);
   }
 
   async close(): Promise<void> {
@@ -116,7 +163,8 @@ export class McpClientAdapter implements McpClientPort {
   }
 }
 
-export const createMcpClient = (profile: ServerProfile): McpClientPort => new McpClientAdapter(profile);
+export const createMcpClient = (profile: ServerProfile, authProvider?: OAuthClientProvider): McpClientPort =>
+  new McpClientAdapter(profile, defaultDependencies, authProvider);
 
 function parseHttpUrl(value: string): URL {
   const url = new URL(value);
