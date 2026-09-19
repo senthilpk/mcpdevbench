@@ -1,0 +1,17 @@
+{
+  "client_id": "https://senthilpk.github.io/mcpdevbench/oauth/client-id.json",
+  "client_name": "MCPDevBench",
+  "client_uri": "https://github.com/senthilpk/mcpdevbench",
+  "application_type": "native",
+  "redirect_uris": [
+    "http://127.0.0.1:51782/__mcpdevbench_oauth_v1/callback"
+  ],
+  "grant_types": [
+    "authorization_code",
+    "refresh_token"
+  ],
+  "response_types": [
+    "code"
+  ],
+  "token_endpoint_auth_method": "none"
+}
