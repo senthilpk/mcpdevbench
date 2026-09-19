@@ -1,8 +1,9 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
+import type { ServerSummary } from '@/renderer/components/domain/ServerTable.vue';
 import ServerTable from '@/renderer/components/domain/ServerTable.vue';
 
-const servers = [
+const servers: ServerSummary[] = [
   { id: 'tveyes', name: 'TVEyes Local', transport: 'STDIO', tools: 12, state: 'connected' as const },
   { id: 'search', name: 'Search MCP', transport: 'HTTP', tools: 8, state: 'idle' as const },
   { id: 'analytics', name: 'Analytics', transport: 'HTTP', tools: 4, state: 'degraded' as const },

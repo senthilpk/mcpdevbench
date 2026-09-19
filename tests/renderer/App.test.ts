@@ -17,6 +17,9 @@ describe('App', () => {
 
     expect(wrapper.get('h1').text()).toBe('MCPDevBench');
     expect(wrapper.get('[data-testid="app-status"]').text()).toBe('Ready');
+    expect(wrapper.get('nav[aria-label="Primary"]').text()).toContain('Servers');
+    expect(wrapper.get('[aria-current="page"]').text()).toContain('Servers');
+    expect(wrapper.get('button[aria-label="Toggle navigation"]').element.tagName).toBe('BUTTON');
   });
 
   it('shows unavailable when the health query fails', async () => {

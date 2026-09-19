@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import ApplicationStatus, {
-  type ApplicationState,
-} from '@/renderer/components/domain/ApplicationStatus.vue';
+import type { ApplicationState } from '@/renderer/components/domain/ApplicationStatus.vue';
+import AppSidebar from '@/renderer/components/shell/AppSidebar.vue';
+import AppToolbar from '@/renderer/components/shell/AppToolbar.vue';
+import { SidebarInset, SidebarProvider } from '@/renderer/components/ui/sidebar';
 
 const applicationState = ref<ApplicationState>('starting');
 
@@ -18,18 +19,11 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <h1>MCPDevBench</h1>
-      <nav aria-label="Primary">
-        <RouterLink to="/">Dashboard</RouterLink>
-      </nav>
-    </aside>
-    <main class="workspace">
-      <div class="topbar">
-        <ApplicationStatus data-testid="app-status" :state="applicationState" />
-      </div>
-      <RouterView />
-    </main>
-  </div>
+  <SidebarProvider>
+    <AppSidebar />
+    <SidebarInset class="min-w-0 overflow-hidden">
+      <AppToolbar :application-state="applicationState" />
+      <div class="min-h-0 flex-1 overflow-auto"><RouterView /></div>
+    </SidebarInset>
+  </SidebarProvider>
 </template>
