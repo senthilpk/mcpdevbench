@@ -92,6 +92,44 @@ describe('McpOAuthProvider', () => {
     expect(recordStore.getClientInformation).toHaveBeenCalledWith(RESOURCE_URL, undefined);
   });
 
+  it('synthesizes CIMD client information when nothing is stored but discovery confirmed CIMD support', async () => {
+    const { provider, recordStore } = createProvider();
+    const discoveryState: OAuthDiscoveryState = {
+      authorizationServerUrl: ISSUER,
+      authorizationServerMetadata: {
+        issuer: ISSUER,
+        authorization_endpoint: `${ISSUER}/authorize`,
+        token_endpoint: `${ISSUER}/token`,
+        response_types_supported: ['code'],
+        client_id_metadata_document_supported: true,
+      },
+    };
+    recordStore.getDiscoveryState.mockResolvedValueOnce(discoveryState);
+
+    const result = await provider.clientInformation({ issuer: ISSUER });
+
+    expect(result).toEqual({ client_id: provider.clientMetadataUrl, issuer: ISSUER });
+  });
+
+  it('does not synthesize client information when discovery has not confirmed CIMD support', async () => {
+    const { provider, recordStore } = createProvider();
+    const discoveryState: OAuthDiscoveryState = {
+      authorizationServerUrl: ISSUER,
+      authorizationServerMetadata: {
+        issuer: ISSUER,
+        authorization_endpoint: `${ISSUER}/authorize`,
+        token_endpoint: `${ISSUER}/token`,
+        response_types_supported: ['code'],
+        // client_id_metadata_document_supported intentionally absent -- CIMD not confirmed.
+      },
+    };
+    recordStore.getDiscoveryState.mockResolvedValueOnce(discoveryState);
+
+    const result = await provider.clientInformation({ issuer: ISSUER });
+
+    expect(result).toBeUndefined();
+  });
+
   it('resolves tokens() with no context to the active grant, not undefined, when one is saved', async () => {
     const stored: StoredOAuthTokens = { access_token: 'abc', token_type: 'Bearer' };
     const { provider, recordStore } = createProvider();
