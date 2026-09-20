@@ -77,7 +77,7 @@ describe('ServerDashboard', () => {
     expect(window.mcpdevbench.signOut).not.toHaveBeenCalled();
   });
 
-  it('signs out after confirmation and shows a non-blocking warning on revocation failure', async () => {
+  it('signs out after confirmation and shows a non-blocking warning attributed to the server on revocation failure', async () => {
     vi.mocked(window.mcpdevbench.listProfiles).mockResolvedValueOnce([oauthProfile]);
     vi.mocked(window.mcpdevbench.listConnections).mockResolvedValueOnce([connectedOAuthConnection]);
     vi.spyOn(window, 'confirm').mockReturnValue(true);
@@ -92,6 +92,27 @@ describe('ServerDashboard', () => {
     await flushPromises();
     expect(window.mcpdevbench.signOut).toHaveBeenCalledWith('p1');
     expect(wrapper.find('[role="alert"]').exists()).toBe(false);
-    expect(wrapper.text()).toContain('Local sign-out succeeded, but revoking access remotely failed.');
+    expect(wrapper.text()).toContain('OAuth Server: Local sign-out succeeded, but revoking access remotely failed.');
+  });
+
+  it('clears a stale sign-out warning once an unrelated action runs', async () => {
+    const otherProfile = { id: 'p2', name: 'Other Server', transport: 'stdio' as const, command: 'node', args: [] };
+    vi.mocked(window.mcpdevbench.listProfiles).mockResolvedValueOnce([oauthProfile, otherProfile]);
+    vi.mocked(window.mcpdevbench.listConnections).mockResolvedValueOnce([connectedOAuthConnection]);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    window.mcpdevbench.signOut = vi.fn().mockResolvedValue({
+      localCredentialsRemoved: true,
+      revocation: 'failed',
+      warning: 'Local sign-out succeeded, but revoking access remotely failed.',
+    });
+    const wrapper = mount(ServerDashboard, { global: { stubs: { teleport: { template: '<div><slot /></div>' } } } });
+    await flushPromises();
+    await wrapper.get('button[aria-label="Sign out OAuth Server"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.text()).toContain('OAuth Server: Local sign-out succeeded, but revoking access remotely failed.');
+
+    await wrapper.get('button[aria-label="Connect Other Server"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.text()).not.toContain('Local sign-out succeeded');
   });
 });

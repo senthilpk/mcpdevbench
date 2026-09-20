@@ -24,6 +24,7 @@ async function save(input: SaveServerProfileInput): Promise<void> {
 }
 async function run(operation: () => Promise<void>): Promise<void> {
   actionError.value = undefined;
+  signOutWarning.value = undefined;
   try { await operation(); } catch { actionError.value = 'Unable to complete the server action'; }
 }
 function confirmSignOut(serverName: string): boolean {
@@ -32,10 +33,9 @@ function confirmSignOut(serverName: string): boolean {
 async function signOut(profileId: string): Promise<void> {
   const serverName = workspace.rows.value.find((row) => row.id === profileId)?.name ?? profileId;
   if (!confirmSignOut(serverName)) return;
-  signOutWarning.value = undefined;
   await run(async () => {
     const result = await workspace.signOut(profileId);
-    signOutWarning.value = result.warning;
+    if (result.warning) signOutWarning.value = `${serverName}: ${result.warning}`;
   });
 }
 </script>
