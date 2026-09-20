@@ -49,6 +49,50 @@ const promptSummarySchema = z.object({
   }).strict()),
 }).strict();
 
+const toolTextContentSchema = z.object({ type: z.literal('text'), text: z.string() }).strict();
+const toolImageContentSchema = z.object({
+  type: z.literal('image'), data: z.string(), mimeType: z.string(),
+}).strict();
+const toolAudioContentSchema = z.object({
+  type: z.literal('audio'), data: z.string(), mimeType: z.string(),
+}).strict();
+const toolResourceLinkContentSchema = z.object({
+  type: z.literal('resource_link'),
+  uri: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  mimeType: z.string().optional(),
+}).strict();
+const toolEmbeddedResourceContentSchema = z.object({
+  type: z.literal('resource'),
+  uri: z.string(),
+  mimeType: z.string().optional(),
+  text: z.string().optional(),
+  blob: z.string().optional(),
+}).strict();
+
+const toolContentBlockSchema = z.discriminatedUnion('type', [
+  toolTextContentSchema,
+  toolImageContentSchema,
+  toolAudioContentSchema,
+  toolResourceLinkContentSchema,
+  toolEmbeddedResourceContentSchema,
+]);
+
+export const toolCallResultSchema = z.object({
+  content: z.array(toolContentBlockSchema),
+  structuredContent: z.unknown().optional(),
+  isError: z.boolean().optional(),
+}).strict();
+
+export const callToolRequestSchema = z.object({
+  connectionId: z.string().min(1),
+  name: z.string().min(1),
+  arguments: z.record(z.string(), z.unknown()).optional(),
+}).strict();
+
+export const callToolResponseSchema = toolCallResultSchema;
+
 const catalogSchema = <T extends z.ZodType>(item: T) => z.discriminatedUnion('status', [
   z.object({ status: z.literal('unsupported'), items: z.tuple([]) }).strict(),
   z.object({ status: z.literal('ready'), items: z.array(item) }).strict(),
@@ -99,6 +143,7 @@ export const serverChannels = {
   connect: 'servers:connect',
   disconnect: 'servers:disconnect',
   refresh: 'servers:refresh',
+  callTool: 'servers:tool:call',
   connectionsChanged: 'servers:connections:changed',
   reopenAuthorization: 'servers:authorization:reopen',
   cancelAuthorization: 'servers:authorization:cancel',

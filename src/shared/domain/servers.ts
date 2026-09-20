@@ -74,6 +74,37 @@ export type ResourceTemplateSummary = {
 export type PromptArgumentSummary = { name: string; description?: string | undefined; required?: boolean | undefined };
 export type PromptSummary = { name: string; description?: string | undefined; arguments: PromptArgumentSummary[] };
 
+export type ToolTextContent = { type: 'text'; text: string };
+export type ToolImageContent = { type: 'image'; data: string; mimeType: string };
+export type ToolAudioContent = { type: 'audio'; data: string; mimeType: string };
+export type ToolResourceLinkContent = {
+  type: 'resource_link';
+  uri: string;
+  name: string;
+  description?: string | undefined;
+  mimeType?: string | undefined;
+};
+export type ToolEmbeddedResourceContent = {
+  type: 'resource';
+  uri: string;
+  mimeType?: string | undefined;
+  text?: string | undefined;
+  blob?: string | undefined;
+};
+
+export type ToolContentBlock =
+  | ToolTextContent
+  | ToolImageContent
+  | ToolAudioContent
+  | ToolResourceLinkContent
+  | ToolEmbeddedResourceContent;
+
+export type ToolCallResult = {
+  content: ToolContentBlock[];
+  structuredContent?: unknown;
+  isError?: boolean | undefined;
+};
+
 export type ConnectionSnapshot = {
   connectionId: string;
   profileId: string;

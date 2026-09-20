@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   authorizationSnapshotSchema,
+  callToolRequestSchema,
   connectionSnapshotSchema,
   saveServerProfileInputSchema,
   signOutResultSchema,
+  toolCallResultSchema,
 } from '@/shared/contracts/servers';
 
 describe('server contracts', () => {
@@ -77,5 +79,48 @@ describe('server contracts', () => {
         revocation,
       })).toMatchObject({ localCredentialsRemoved: true, revocation });
     }
+  });
+
+  it('parses a text tool-call result', () => {
+    const result = toolCallResultSchema.parse({
+      content: [{ type: 'text', text: 'hello' }],
+    });
+    expect(result).toEqual({ content: [{ type: 'text', text: 'hello' }] });
+  });
+
+  it('parses every tool content block variant', () => {
+    const content = [
+      { type: 'text', text: 'hi' },
+      { type: 'image', data: 'YWJj', mimeType: 'image/png' },
+      { type: 'audio', data: 'YWJj', mimeType: 'audio/wav' },
+      { type: 'resource_link', uri: 'file:///a.txt', name: 'a' },
+      { type: 'resource', uri: 'file:///b.txt', text: 'contents' },
+    ];
+    expect(toolCallResultSchema.parse({ content }).content).toEqual(content);
+  });
+
+  it('parses structuredContent and isError on a tool-call result', () => {
+    const result = toolCallResultSchema.parse({
+      content: [],
+      structuredContent: { count: 3 },
+      isError: true,
+    });
+    expect(result).toEqual({ content: [], structuredContent: { count: 3 }, isError: true });
+  });
+
+  it('rejects an unknown field on a tool content block', () => {
+    expect(() => toolCallResultSchema.parse({
+      content: [{ type: 'text', text: 'hi', extra: 'nope' }],
+    })).toThrow();
+  });
+
+  it('validates a callTool request payload', () => {
+    expect(callToolRequestSchema.parse({
+      connectionId: 'c1', name: 'echo', arguments: { message: 'hi' },
+    })).toEqual({ connectionId: 'c1', name: 'echo', arguments: { message: 'hi' } });
+    expect(callToolRequestSchema.parse({ connectionId: 'c1', name: 'echo' })).toEqual({
+      connectionId: 'c1', name: 'echo',
+    });
+    expect(() => callToolRequestSchema.parse({ connectionId: '', name: 'echo' })).toThrow();
   });
 });
