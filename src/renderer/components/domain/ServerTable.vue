@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plug, RefreshCw, Trash2, Unplug } from '@lucide/vue';
+import { ExternalLink, LogOut, Plug, RefreshCw, Trash2, Unplug, X } from '@lucide/vue';
 import ConnectionStatus from '@/renderer/components/domain/ConnectionStatus.vue';
 import EmptyServerState from '@/renderer/components/domain/EmptyServerState.vue';
 import { Button } from '@/renderer/components/ui/button';
@@ -13,6 +13,9 @@ defineEmits<{
   disconnect: [connectionId: string];
   refresh: [connectionId: string];
   delete: [profileId: string];
+  reopenAuthorization: [connectionId: string];
+  cancelAuthorization: [connectionId: string];
+  signOut: [profileId: string];
 }>();
 </script>
 
@@ -32,12 +35,20 @@ defineEmits<{
           </TableCell>
           <TableCell class="font-mono text-xs text-muted-foreground">{{ server.transport }}</TableCell>
           <TableCell class="text-right font-mono tabular-nums">{{ server.tools }}</TableCell>
-          <TableCell><ConnectionStatus :state="server.state" /></TableCell>
+          <TableCell>
+            <ConnectionStatus :state="server.state" />
+            <div v-if="server.authorization?.warning" class="mt-1 max-w-56 text-xs text-warning">{{ server.authorization.warning }}</div>
+          </TableCell>
           <TableCell><div class="flex justify-end gap-1">
             <Button v-if="server.state === 'idle' || server.state === 'error'" size="icon-sm" variant="ghost" :aria-label="`Connect ${server.name}`" @click="$emit('connect', server.id)"><Plug /></Button>
+            <template v-if="server.authorization && server.connectionId">
+              <Button v-show="server.authorization.canReopenBrowser" size="icon-sm" variant="ghost" :aria-label="`Open browser again for ${server.name}`" @click="$emit('reopenAuthorization', server.connectionId)"><ExternalLink /></Button>
+              <Button v-show="server.authorization.canCancel" size="icon-sm" variant="ghost" :aria-label="`Cancel authorization for ${server.name}`" @click="$emit('cancelAuthorization', server.connectionId)"><X /></Button>
+            </template>
             <template v-if="server.connectionId && server.state === 'connected'">
               <Button size="icon-sm" variant="ghost" :aria-label="`Refresh ${server.name}`" @click="$emit('refresh', server.connectionId)"><RefreshCw /></Button>
               <Button size="icon-sm" variant="ghost" :aria-label="`Disconnect ${server.name}`" @click="$emit('disconnect', server.connectionId)"><Unplug /></Button>
+              <Button v-if="server.authorization?.status === 'authorized'" size="icon-sm" variant="ghost" :aria-label="`Sign out ${server.name}`" @click="$emit('signOut', server.id)"><LogOut /></Button>
             </template>
             <Button size="icon-sm" variant="ghost" :aria-label="`Delete ${server.name}`" :disabled="server.state === 'connecting' || server.state === 'disconnecting'" @click="$emit('delete', server.id)"><Trash2 /></Button>
           </div></TableCell>

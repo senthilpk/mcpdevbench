@@ -20,6 +20,9 @@ describe('ConnectionStatus', () => {
     ['idle', 'Idle'],
     ['degraded', 'Degraded'],
     ['error', 'Error'],
+    ['authorization-required', 'Authorization required'],
+    ['authorizing', 'Waiting for browser'],
+    ['completing-authorization', 'Completing authorization'],
   ] as const)('communicates %s with text', (state, label) => {
     const wrapper = mount(ConnectionStatus, { props: { state } });
     expect(wrapper.text()).toContain(label);

@@ -13,6 +13,7 @@ const workspace = useServerWorkspace();
 const addOpen = ref(false);
 const saving = ref(false);
 const actionError = ref<string>();
+const signOutWarning = ref<string>();
 
 async function save(input: SaveServerProfileInput): Promise<void> {
   saving.value = true;
@@ -24,6 +25,18 @@ async function save(input: SaveServerProfileInput): Promise<void> {
 async function run(operation: () => Promise<void>): Promise<void> {
   actionError.value = undefined;
   try { await operation(); } catch { actionError.value = 'Unable to complete the server action'; }
+}
+function confirmSignOut(serverName: string): boolean {
+  return window.confirm(`Sign out of ${serverName}? This removes stored authorization; you'll need to reauthorize next time.`);
+}
+async function signOut(profileId: string): Promise<void> {
+  const serverName = workspace.rows.value.find((row) => row.id === profileId)?.name ?? profileId;
+  if (!confirmSignOut(serverName)) return;
+  signOutWarning.value = undefined;
+  await run(async () => {
+    const result = await workspace.signOut(profileId);
+    signOutWarning.value = result.warning;
+  });
 }
 </script>
 
@@ -39,10 +52,22 @@ async function run(operation: () => Promise<void>): Promise<void> {
     <div v-if="workspace.error.value || actionError" role="alert" class="mt-6 flex items-center justify-between border border-destructive/30 bg-card px-4 py-3 text-sm text-destructive">
       <span>{{ workspace.error.value || actionError }}</span><Button variant="outline" size="sm" @click="workspace.load"><RotateCw /> Retry</Button>
     </div>
+    <div v-if="signOutWarning" role="status" class="mt-6 border border-warning/30 bg-card px-4 py-3 text-sm text-warning">{{ signOutWarning }}</div>
     <section class="mt-6" aria-labelledby="server-inventory-title">
       <div class="mb-3 flex items-center justify-between"><h3 id="server-inventory-title" class="text-sm font-semibold">Server inventory</h3><span class="font-mono text-xs text-muted-foreground">{{ workspace.profiles.value.length }} configured</span></div>
       <div v-if="workspace.loading.value" data-testid="server-loading" class="grid gap-2"><Skeleton class="h-10 w-full" /><Skeleton class="h-10 w-full" /><Skeleton class="h-10 w-full" /></div>
-      <ServerTable v-else :servers="workspace.rows.value" @add="addOpen = true" @connect="run(() => workspace.connect($event))" @disconnect="run(() => workspace.disconnect($event))" @refresh="run(() => workspace.refresh($event))" @delete="run(() => workspace.remove($event))" />
+      <ServerTable
+        v-else
+        :servers="workspace.rows.value"
+        @add="addOpen = true"
+        @connect="run(() => workspace.connect($event))"
+        @disconnect="run(() => workspace.disconnect($event))"
+        @refresh="run(() => workspace.refresh($event))"
+        @delete="run(() => workspace.remove($event))"
+        @reopen-authorization="run(() => workspace.reopenAuthorization($event))"
+        @cancel-authorization="run(() => workspace.cancelAuthorization($event))"
+        @sign-out="signOut($event)"
+      />
     </section>
     <AddServerSheet v-model:open="addOpen" :pending="saving" @save="save" />
   </section>

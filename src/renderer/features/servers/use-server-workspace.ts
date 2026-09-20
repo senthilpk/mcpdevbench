@@ -1,6 +1,13 @@
 import { computed, onMounted, onUnmounted, readonly, ref } from 'vue';
 import type { ConnectionState as StatusState } from '@/renderer/components/domain/ConnectionStatus.vue';
-import type { CatalogSnapshot, ConnectionSnapshot, SaveServerProfileInput, ServerProfile } from '@/shared/domain/servers';
+import type {
+  AuthorizationSnapshot,
+  CatalogSnapshot,
+  ConnectionSnapshot,
+  SaveServerProfileInput,
+  ServerProfile,
+  SignOutResult,
+} from '@/shared/domain/servers';
 
 export type ServerRow = {
   id: string;
@@ -11,12 +18,13 @@ export type ServerRow = {
   connectionId?: string | undefined;
   failure?: string | undefined;
   catalogSummary?: string | undefined;
+  authorization?: AuthorizationSnapshot | undefined;
 };
 
 const stateMap: Record<ConnectionSnapshot['state'], StatusState> = {
   connecting: 'connecting', initializing: 'connecting', discovering: 'connecting',
   ready: 'connected', closing: 'disconnecting', disconnected: 'idle', failed: 'error',
-  'authorization-required': 'connecting', authorizing: 'connecting', 'completing-authorization': 'connecting',
+  'authorization-required': 'authorization-required', authorizing: 'authorizing', 'completing-authorization': 'completing-authorization',
 };
 
 export function useServerWorkspace() {
@@ -39,6 +47,7 @@ export function useServerWorkspace() {
       catalogSummary: connection?.state === 'ready'
         ? catalogText(connection)
         : undefined,
+      authorization: connection?.authorization,
     };
   }));
 
@@ -73,6 +82,9 @@ export function useServerWorkspace() {
   const connect = async (profileId: string) => { await window.mcpdevbench.connect(profileId); };
   const disconnect = async (connectionId: string) => { await window.mcpdevbench.disconnect(connectionId); };
   const refresh = async (connectionId: string) => { await window.mcpdevbench.refresh(connectionId); };
+  const reopenAuthorization = async (connectionId: string) => { await window.mcpdevbench.reopenAuthorization(connectionId); };
+  const cancelAuthorization = async (connectionId: string) => { await window.mcpdevbench.cancelAuthorization(connectionId); };
+  const signOut = async (profileId: string): Promise<SignOutResult> => window.mcpdevbench.signOut(profileId);
   const remove = async (profileId: string) => {
     await window.mcpdevbench.deleteProfile(profileId);
     profiles.value = profiles.value.filter((profile) => profile.id !== profileId);
@@ -90,6 +102,7 @@ export function useServerWorkspace() {
     profiles: readonly(profiles), connections: readonly(connections), rows,
     loading: readonly(loading), error: readonly(error), metrics,
     load, save, connect, disconnect, refresh, remove,
+    reopenAuthorization, cancelAuthorization, signOut,
   };
 }
 
