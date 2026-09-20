@@ -133,19 +133,18 @@ describe('ServerInspector', () => {
     expect(wrapper.text()).toMatch(/\d+(\.\d+)? MB/);
   });
 
-  it('defaults to the Preview tab, falling back to content when there is no structuredContent', async () => {
+  it('Preview always shows content -- the spec-required field -- with no structuredContent section when absent', async () => {
     vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({ content: [{ type: 'text', text: 'hi' }] });
     const wrapper = await mountInspector();
     await wrapper.get('[data-testid="tool-echo"]').trigger('click');
     await wrapper.get('textarea').setValue('{}');
     await wrapper.get('[data-testid="call-tool"]').trigger('click');
     await flushPromises();
-    expect(wrapper.find('[data-testid="result-preview"]').exists()).toBe(true);
-    expect(wrapper.get('[data-testid="result-preview"]').text()).toContain('"hi"');
-    expect(wrapper.find('[data-testid="tab-structured-content"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="result-content"]').text()).toContain('"hi"');
+    expect(wrapper.find('[data-testid="result-structured-content"]').exists()).toBe(false);
   });
 
-  it('shows structuredContent in Preview when the tool returns it, never both at once', async () => {
+  it('Preview shows content and structuredContent together when the tool returns both', async () => {
     vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({
       content: [{ type: 'text', text: 'hi' }],
       structuredContent: { count: 3 },
@@ -155,8 +154,8 @@ describe('ServerInspector', () => {
     await wrapper.get('textarea').setValue('{}');
     await wrapper.get('[data-testid="call-tool"]').trigger('click');
     await flushPromises();
-    expect(wrapper.get('[data-testid="result-preview"]').text()).toContain('count');
-    expect(wrapper.get('[data-testid="result-preview"]').text()).not.toContain('"hi"');
+    expect(wrapper.get('[data-testid="result-content"]').text()).toContain('"hi"');
+    expect(wrapper.get('[data-testid="result-structured-content"]').text()).toContain('count');
   });
 
   it('Raw always shows the complete, unfiltered result exactly as the tool returned it', async () => {
@@ -170,7 +169,7 @@ describe('ServerInspector', () => {
     await wrapper.get('[data-testid="call-tool"]').trigger('click');
     await flushPromises();
     await wrapper.get('[data-testid="tab-raw"]').trigger('click');
-    expect(wrapper.find('[data-testid="result-preview"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="result-content"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="result-raw"]').text()).toContain('"hi"');
     expect(wrapper.get('[data-testid="result-raw"]').text()).toContain('count');
   });

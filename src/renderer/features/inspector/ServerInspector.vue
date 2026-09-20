@@ -38,8 +38,6 @@ const callDurationMs = ref<number>();
 const callSizeBytes = ref<number>();
 const callStatus = ref<CallStatus>();
 const activeTab = ref<'preview' | 'raw'>('preview');
-const previewData = computed(() =>
-  result.value?.structuredContent !== undefined ? result.value.structuredContent : result.value?.content);
 const copied = ref(false);
 let copiedTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -199,7 +197,13 @@ async function copyResult(): Promise<void> {
             </div>
 
             <div class="mt-3">
-              <JsonTreeView v-if="activeTab === 'preview'" data-testid="result-preview" :data="previewData" />
+              <template v-if="activeTab === 'preview'">
+                <JsonTreeView data-testid="result-content" :data="result.content" />
+                <div v-if="result.structuredContent !== undefined" class="mt-4 border-t border-border pt-3">
+                  <div class="mb-1.5 text-xs font-medium uppercase text-muted-foreground">Structured Content</div>
+                  <JsonTreeView data-testid="result-structured-content" :data="result.structuredContent" />
+                </div>
+              </template>
               <pre v-else data-testid="result-raw" class="overflow-auto text-xs">{{ JSON.stringify(result, null, 2) }}</pre>
             </div>
           </template>
