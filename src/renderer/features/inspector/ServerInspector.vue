@@ -36,7 +36,7 @@ const result = ref<ToolCallResult>();
 const callDurationMs = ref<number>();
 const callSizeBytes = ref<number>();
 const callStatus = ref<CallStatus>();
-const activeTab = ref<'preview' | 'raw'>('preview');
+const activeTab = ref<'preview' | 'raw' | 'structured-content'>('preview');
 const copied = ref(false);
 let copiedTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -197,10 +197,25 @@ async function copyResult(): Promise<void> {
               >
                 Raw
               </button>
+              <button
+                v-if="result.structuredContent !== undefined"
+                type="button"
+                data-testid="tab-structured-content"
+                class="border-b-2 px-1 py-1.5"
+                :class="activeTab === 'structured-content' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'"
+                @click="activeTab = 'structured-content'"
+              >
+                Structured Content
+              </button>
             </div>
 
             <div class="mt-3">
               <JsonTreeView v-if="activeTab === 'preview'" data-testid="result-preview" :data="result.content" />
+              <JsonTreeView
+                v-else-if="activeTab === 'structured-content'"
+                data-testid="result-structured-content"
+                :data="result.structuredContent"
+              />
               <pre v-else data-testid="result-raw" class="overflow-auto text-xs">{{ JSON.stringify(result, null, 2) }}</pre>
             </div>
           </template>
