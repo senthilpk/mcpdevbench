@@ -321,7 +321,17 @@ export class ConnectionManager {
     let probeError: unknown;
     try {
       await probeClient.connect();
-      return; // Reuse, refresh, or a genuinely public server: no interactive flow was ever needed.
+      if (session.closed) return;
+      // Distinguish "this resource has a stored OAuth grant that the SDK reused/refreshed"
+      // from "this is a genuinely public server that never needed OAuth at all" -- only the
+      // former should show as authorized (and make Sign out / the storage warning reachable
+      // again after any reconnect or application restart, once the interactive flow no
+      // longer needs to re-run).
+      const hasStoredGrant = (await authService.recordStore.getTokens(resourceUrl)) !== undefined;
+      if (!session.closed && hasStoredGrant) {
+        this.update(session, { authorization: this.authorizationSnapshot('authorized') });
+      }
+      return;
     } catch (error) {
       probeError = error;
     }
@@ -390,6 +400,12 @@ export class ConnectionManager {
         return;
       }
       if (!(error instanceof McpAuthorizationRequiredError)) {
+        // Not the expected "browser now open" signal (e.g. `shell.openExternal` rejected, or
+        // a transport/network error during the interactive attempt): the coordinator's
+        // `completion` will never settle on its own here, so the reserved slot must be
+        // released explicitly -- otherwise it stays held for the full coordinator timeout,
+        // blocking every other profile's OAuth need with `authorization_busy`.
+        await authService.cancelAuthorization(connectionId).catch(() => {});
         throw new AuthorizationFailureSignal(
           'authorization_attempt_failed',
           'The authorization attempt failed unexpectedly; Connect can retry.',

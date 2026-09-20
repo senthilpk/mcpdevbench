@@ -177,6 +177,11 @@ describe('SDK-native OAuth against a real loopback fixture', () => {
       await vi.waitFor(() => expect(manager.list()[0]?.state).toBe('ready'), { timeout: 10_000 });
       expect(openBrowserSpy).toHaveBeenCalledTimes(1); // still just once: refresh/stored-token reconnect, no new browser interaction.
 
+      // The reused grant must still surface as authorized -- this is what makes Sign out (and
+      // the storage-mode warning) reachable in the renderer after any reconnect, not just on
+      // the one connection that happened to run the interactive flow.
+      expect(manager.list()[0]?.authorization).toMatchObject({ status: 'authorized' });
+
       const secondConnectionId = manager.list()[0]!.connectionId;
 
       // --- Sign out: disconnects, revokes remotely, and clears local authorization. ---

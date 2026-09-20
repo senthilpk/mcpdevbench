@@ -50,7 +50,11 @@ function queuedFactory(...clients: McpClientPort[]): McpClientFactory {
 
 function createAuthService(overrides: Partial<AuthorizationService> = {}): AuthorizationService {
   return {
-    recordStore: { getGrants: vi.fn().mockResolvedValue([]), clearResource: vi.fn() } as never,
+    recordStore: {
+      getGrants: vi.fn().mockResolvedValue([]),
+      clearResource: vi.fn(),
+      getTokens: vi.fn().mockResolvedValue(undefined),
+    } as never,
     beginInteractiveAttempt: vi.fn().mockRejectedValue(new Error('beginInteractiveAttempt should not have been called')),
     reopenAuthorization: vi.fn().mockResolvedValue(undefined),
     cancelAuthorization: vi.fn().mockResolvedValue(undefined),
@@ -141,10 +145,19 @@ describe('ConnectionManager', () => {
 });
 
 describe('ConnectionManager OAuth', () => {
-  it('reuses stored credentials without ever entering an interactive authorization state', async () => {
+  it('reuses stored credentials without ever entering an interactive authorization state, and still reports authorized status so Sign out stays reachable', async () => {
     const client = createClient();
     const factory = queuedFactory(client);
-    const authService = createAuthService();
+    const authService = createAuthService({
+      recordStore: {
+        getGrants: vi.fn().mockResolvedValue([]),
+        clearResource: vi.fn(),
+        // A stored access token is exactly what makes the SDK's own reuse/refresh branch
+        // succeed without ever calling `redirectToAuthorization` -- this is the "reuse" case,
+        // as opposed to a genuinely public server that never had a grant to begin with.
+        getTokens: vi.fn().mockResolvedValue({ access_token: 'stored-at', token_type: 'Bearer' }),
+      } as never,
+    });
     const manager = new ConnectionManager(createStore(oauthProfiles), factory, authService);
 
     const states: string[] = [];
@@ -157,6 +170,22 @@ describe('ConnectionManager OAuth', () => {
     await vi.waitFor(() => expect(manager.list()[0]?.state).toBe('ready'));
 
     expect(states).toEqual(['connecting', 'initializing', 'discovering', 'ready']);
+    expect(authService.beginInteractiveAttempt).not.toHaveBeenCalled();
+    // This is the regression this test guards: a reused/refreshed grant must still surface
+    // `status: 'authorized'` (the ServerTable Sign out button and the storage warning are
+    // both gated on this), not `undefined`, even though no interactive state was ever entered.
+    expect(manager.list()[0]?.authorization).toMatchObject({ status: 'authorized', storage: 'persistent' });
+  });
+
+  it('leaves a genuinely public server (no stored grant at all) with no authorization snapshot', async () => {
+    const client = createClient();
+    const factory = queuedFactory(client);
+    const authService = createAuthService(); // default getTokens() resolves undefined
+    const manager = new ConnectionManager(createStore(oauthProfiles), factory, authService);
+
+    await manager.connect('p3');
+    await vi.waitFor(() => expect(manager.list()[0]?.state).toBe('ready'));
+
     expect(authService.beginInteractiveAttempt).not.toHaveBeenCalled();
     expect(manager.list()[0]?.authorization).toBeUndefined();
   });
@@ -190,6 +219,8 @@ describe('ConnectionManager OAuth', () => {
     const stdioCall = vi.mocked(factory).mock.calls.find((call) => call[0].id === 'p1');
     expect(stdioCall?.[1]).toBeUndefined();
     expect(authService.beginInteractiveAttempt).not.toHaveBeenCalled();
+    expect(manager.list().find((snapshot) => snapshot.profileId === 'p1')?.authorization).toBeUndefined();
+    expect(manager.list().find((snapshot) => snapshot.profileId === 'p2')?.authorization).toBeUndefined();
   });
 
   it('completes the full interactive lifecycle and connects a fresh adapter that preserves the provider', async () => {
@@ -338,11 +369,15 @@ describe('ConnectionManager OAuth', () => {
     });
     const manager = new ConnectionManager(createStore(oauthProfiles), factory, authService);
 
-    await manager.connect('p3');
+    const started = await manager.connect('p3');
     await vi.waitFor(() => expect(manager.list()[0]?.state).toBe('failed'));
     expect(manager.list()[0]?.failure?.code).toBe('authorization_attempt_failed');
     expect(manager.list()[0]?.failure?.message).not.toContain('network reset');
     expect(manager.list()[0]?.failure?.message.toLowerCase()).not.toContain('browser');
+    // The coordinator's one application-wide interactive slot must be released on this exit
+    // path too -- otherwise it stays reserved for the full coordinator timeout and every other
+    // profile's Connect fails with authorization_busy in the meantime.
+    expect(authService.cancelAuthorization).toHaveBeenCalledWith(started.connectionId);
   });
 
   it('releases an orphaned coordinator reservation when disconnect lands before the interactive attempt is registered', async () => {
@@ -468,6 +503,9 @@ describe('ConnectionManager OAuth', () => {
         }];
       }),
       clearResource: vi.fn().mockImplementation(async () => { order.push('clear'); }),
+      // Reused by the probe's connect() to distinguish the reuse case; irrelevant to this
+      // test's own assertions, but must exist so that lookup doesn't throw.
+      getTokens: vi.fn().mockResolvedValue({ access_token: 'at', token_type: 'Bearer' }),
     };
     const fetchImpl = vi.fn().mockImplementation(async () => {
       order.push('revoke-network');
