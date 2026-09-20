@@ -5,6 +5,7 @@ import {
   type HealthStatusContract,
 } from '@/shared/contracts/health';
 import {
+  callToolResponseSchema,
   cancelAuthorizationResponseSchema,
   connectionSnapshotSchema,
   connectionSnapshotsSchema,
@@ -19,6 +20,7 @@ import type {
   SaveServerProfileInput,
   ServerProfile,
   SignOutResult,
+  ToolCallResult,
 } from '@/shared/domain/servers';
 
 export type MCPDevBenchApi = {
@@ -30,6 +32,7 @@ export type MCPDevBenchApi = {
   connect(profileId: string): Promise<ConnectionSnapshot>;
   disconnect(connectionId: string): Promise<ConnectionSnapshot>;
   refresh(connectionId: string): Promise<ConnectionSnapshot>;
+  callTool(connectionId: string, name: string, args?: Record<string, unknown>): Promise<ToolCallResult>;
   reopenAuthorization(connectionId: string): Promise<ConnectionSnapshot>;
   cancelAuthorization(connectionId: string): Promise<ConnectionSnapshot>;
   signOut(profileId: string): Promise<SignOutResult>;
@@ -45,6 +48,8 @@ export const createMcpDevBenchApi = (): MCPDevBenchApi => ({
   connect: async (profileId) => connectionSnapshotSchema.parse(await ipcRenderer.invoke(serverChannels.connect, profileId)),
   disconnect: async (connectionId) => connectionSnapshotSchema.parse(await ipcRenderer.invoke(serverChannels.disconnect, connectionId)),
   refresh: async (connectionId) => connectionSnapshotSchema.parse(await ipcRenderer.invoke(serverChannels.refresh, connectionId)),
+  callTool: async (connectionId, name, args) =>
+    callToolResponseSchema.parse(await ipcRenderer.invoke(serverChannels.callTool, { connectionId, name, arguments: args })),
   reopenAuthorization: async (connectionId) =>
     reopenAuthorizationResponseSchema.parse(await ipcRenderer.invoke(serverChannels.reopenAuthorization, connectionId)),
   cancelAuthorization: async (connectionId) =>

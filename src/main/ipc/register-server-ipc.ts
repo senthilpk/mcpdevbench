@@ -2,6 +2,8 @@ import { ipcMain, type WebContents } from 'electron';
 import { z } from 'zod';
 import type { ProfileStore } from '@/main/profiles/profile-store';
 import {
+  callToolRequestSchema,
+  callToolResponseSchema,
   cancelAuthorizationResponseSchema,
   connectionSnapshotSchema,
   connectionSnapshotsSchema,
@@ -12,7 +14,7 @@ import {
   serverProfilesSchema,
   signOutResponseSchema,
 } from '@/shared/contracts/servers';
-import type { ConnectionSnapshot, SignOutResult } from '@/shared/domain/servers';
+import type { ConnectionSnapshot, SignOutResult, ToolCallResult } from '@/shared/domain/servers';
 
 const idSchema = z.string().min(1);
 
@@ -21,6 +23,7 @@ type ConnectionService = {
   connect(profileId: string): Promise<ConnectionSnapshot>;
   disconnect(connectionId: string): Promise<ConnectionSnapshot>;
   refresh(connectionId: string): Promise<ConnectionSnapshot>;
+  callTool(connectionId: string, name: string, args?: Record<string, unknown>): Promise<ToolCallResult>;
   disconnectProfile(profileId: string): Promise<void>;
   reopenAuthorization(connectionId: string): Promise<ConnectionSnapshot>;
   cancelAuthorization(connectionId: string): Promise<ConnectionSnapshot>;
@@ -56,6 +59,10 @@ export function registerServerIpc({
     connectionSnapshotSchema.parse(await connections.disconnect(idSchema.parse(value))));
   ipcMain.handle(serverChannels.refresh, async (_event, value: unknown) =>
     connectionSnapshotSchema.parse(await connections.refresh(idSchema.parse(value))));
+  ipcMain.handle(serverChannels.callTool, async (_event, value: unknown) => {
+    const { connectionId, name, arguments: toolArguments } = callToolRequestSchema.parse(value);
+    return callToolResponseSchema.parse(await connections.callTool(connectionId, name, toolArguments));
+  });
   ipcMain.handle(serverChannels.reopenAuthorization, async (_event, value: unknown) =>
     reopenAuthorizationResponseSchema.parse(await connections.reopenAuthorization(idSchema.parse(value))));
   ipcMain.handle(serverChannels.cancelAuthorization, async (_event, value: unknown) =>

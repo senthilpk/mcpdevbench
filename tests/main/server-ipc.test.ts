@@ -33,7 +33,7 @@ describe('registerServerIpc', () => {
     };
     const connections = createConnections();
     registerServerIpc({ store, connections, webContents: { getAllWebContents: () => [] } });
-    expect(electron.handlers.size).toBe(10);
+    expect(electron.handlers.size).toBe(11);
     await expect(electron.handlers.get(serverChannels.profilesSave)?.({}, {
       name: 'unsafe', transport: 'stdio', command: 'node server.js', args: [], env: { TOKEN: 'x' },
     })).rejects.toThrow();
@@ -129,6 +129,24 @@ describe('reopenAuthorization / cancelAuthorization / signOut IPC handlers', () 
     registerServerIpc({ store: storeStub(), connections, webContents: { getAllWebContents: () => [] } });
     await expect(electron.handlers.get(serverChannels.signOut)?.({}, 'p1')).rejects.toThrow();
   });
+
+  it('validates and forwards a callTool request, and parses the response', async () => {
+    const connections = createConnections();
+    connections.callTool = vi.fn(async () => ({ content: [{ type: 'text', text: 'hi' }] }));
+    registerServerIpc({ store: storeStub(), connections, webContents: { getAllWebContents: () => [] } });
+    const result = await electron.handlers.get(serverChannels.callTool)?.(
+      {}, { connectionId: 'c1', name: 'echo', arguments: { message: 'hi' } },
+    );
+    expect(connections.callTool).toHaveBeenCalledWith('c1', 'echo', { message: 'hi' });
+    expect(result).toEqual({ content: [{ type: 'text', text: 'hi' }] });
+  });
+
+  it('rejects a malformed callTool request before it reaches the connection manager', async () => {
+    const connections = createConnections();
+    registerServerIpc({ store: storeStub(), connections, webContents: { getAllWebContents: () => [] } });
+    await expect(electron.handlers.get(serverChannels.callTool)?.({}, { connectionId: '', name: 'echo' })).rejects.toThrow();
+    expect(connections.callTool).not.toHaveBeenCalled();
+  });
 });
 
 describe('connectionsChanged payload safety', () => {
@@ -181,6 +199,13 @@ describe('preload server API', () => {
     electron.invoke.mockResolvedValueOnce({ localCredentialsRemoved: true, revocation: 'bogus' });
     await expect(api.signOut('p1')).rejects.toThrow();
   });
+
+  it('parses a callTool response before returning it', async () => {
+    const api = createMcpDevBenchApi();
+    electron.invoke.mockResolvedValueOnce({ content: [{ type: 'text', text: 'hi' }] });
+    await expect(api.callTool('c1', 'echo', { message: 'hi' })).resolves.toEqual({ content: [{ type: 'text', text: 'hi' }] });
+    expect(electron.invoke).toHaveBeenCalledWith(serverChannels.callTool, { connectionId: 'c1', name: 'echo', arguments: { message: 'hi' } });
+  });
 });
 
 function storeStub() {
@@ -207,6 +232,7 @@ function createConnections() {
     reopenAuthorization: vi.fn(async (connectionId: string) => makeSnapshot({ connectionId, state: 'authorizing' })),
     cancelAuthorization: vi.fn(async (connectionId: string) => makeSnapshot({ connectionId, state: 'disconnected' })),
     signOut: vi.fn(async () => ({ localCredentialsRemoved: true, revocation: 'unavailable' })),
+    callTool: vi.fn(async () => ({ content: [] })),
     subscribe: vi.fn((next: (snapshots: unknown[]) => void) => { listener = next; return vi.fn(); }),
     emit: (snapshots: unknown[]) => listener?.(snapshots),
   };
