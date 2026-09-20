@@ -200,7 +200,17 @@ async function copyResult(): Promise<void> {
             </div>
 
             <div class="mt-3">
-              <JsonTreeView v-if="activeTab === 'structure'" data-testid="result-structure" :data="result" />
+              <div v-if="activeTab === 'structure'" data-testid="result-structure">
+                <p class="text-xs font-medium uppercase text-muted-foreground">Content</p>
+                <p class="mb-2 text-xs text-muted-foreground">Blocks meant for display to a human or LLM.</p>
+                <JsonTreeView :data="result.content" />
+
+                <div v-if="result.structuredContent !== undefined" data-testid="structured-content-section" class="mt-4">
+                  <p class="text-xs font-medium uppercase text-muted-foreground">Structured Content</p>
+                  <p class="mb-2 text-xs text-muted-foreground">Machine-readable data matching the tool's output schema.</p>
+                  <JsonTreeView :data="result.structuredContent" />
+                </div>
+              </div>
               <pre v-else data-testid="result-raw" class="overflow-auto text-xs">{{ JSON.stringify(result, null, 2) }}</pre>
             </div>
           </template>
