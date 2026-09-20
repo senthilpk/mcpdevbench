@@ -36,6 +36,16 @@ test('discovers a real STDIO server and preserves its profile across restart', a
     await expect(row).toContainText('Connected');
     await expect(row).toContainText('2');
     await expect(row).toContainText('1 resources · 1 templates · 1 prompts');
+
+    await row.getByRole('button', { name: 'View Catalog Fixture' }).click();
+    await expect(page.getByRole('heading', { name: 'Catalog Fixture' })).toBeVisible();
+    await page.getByTestId('tool-echo').click();
+    await page.locator('textarea').fill('{"message":"hello from the inspector"}');
+    await page.getByTestId('call-tool').click();
+    await expect(page.getByText('hello from the inspector')).toBeVisible();
+    await page.getByRole('link', { name: 'Back to servers' }).click();
+    await expect(page.getByRole('heading', { name: 'Servers' })).toBeVisible();
+
     await row.getByRole('button', { name: 'Refresh Catalog Fixture' }).click();
     await expect(row).toContainText('Connected');
     await page.screenshot({ path: 'tests/e2e/screenshots/systems-light-1280x800.png', fullPage: true });

@@ -1,6 +1,6 @@
 # MCPDevBench Tool Inspector Design
 
-Status: Proposed for implementation
+Status: Implemented
 
 Date: 2026-09-20
 
