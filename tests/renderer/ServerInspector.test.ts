@@ -72,7 +72,7 @@ describe('ServerInspector', () => {
     await wrapper.get('textarea').setValue('{}');
     await wrapper.get('[data-testid="call-tool"]').trigger('click');
     await flushPromises();
-    const resultText = wrapper.findAll('p').find((p) => p.text() === longWord);
+    const resultText = wrapper.findAll('span').find((span) => span.text() === `"${longWord}"`);
     expect(resultText?.classes()).toContain('break-words');
   });
 
@@ -96,7 +96,7 @@ describe('ServerInspector', () => {
     await flushPromises();
     expect(wrapper.find('[role="alert"]').exists()).toBe(false);
     expect(wrapper.text()).toContain('bad input');
-    expect(wrapper.text()).toContain('Tool reported an error');
+    expect(wrapper.text()).toContain('Tool error');
   });
 
   it('shows a sanitized error banner when the call itself fails', async () => {
@@ -107,5 +107,48 @@ describe('ServerInspector', () => {
     await wrapper.get('[data-testid="call-tool"]').trigger('click');
     await flushPromises();
     expect(wrapper.get('[role="alert"]').text()).not.toContain('ECONNRESET');
+    expect(wrapper.text()).toContain('Call failed');
+  });
+
+  it('shows duration, size, and a success status after a successful call', async () => {
+    vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({ content: [{ type: 'text', text: 'hi' }] });
+    const wrapper = await mountInspector();
+    await wrapper.get('[data-testid="tool-echo"]').trigger('click');
+    await wrapper.get('textarea').setValue('{}');
+    await wrapper.get('[data-testid="call-tool"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.text()).toContain('Success');
+    expect(wrapper.text()).toMatch(/\d+ ms/);
+    expect(wrapper.text()).toMatch(/\d+(\.\d+)? (B|KB)/);
+  });
+
+  it('defaults to the Structure tab and switches to Raw on click', async () => {
+    vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({ content: [{ type: 'text', text: 'hi' }] });
+    const wrapper = await mountInspector();
+    await wrapper.get('[data-testid="tool-echo"]').trigger('click');
+    await wrapper.get('textarea').setValue('{}');
+    await wrapper.get('[data-testid="call-tool"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-testid="result-structure"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="result-raw"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="tab-raw"]').trigger('click');
+    expect(wrapper.find('[data-testid="result-structure"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="result-raw"]').text()).toContain('"hi"');
+  });
+
+  it('copies the raw result JSON to the clipboard when Copy is clicked', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({ content: [{ type: 'text', text: 'hi' }] });
+    const wrapper = await mountInspector();
+    await wrapper.get('[data-testid="tool-echo"]').trigger('click');
+    await wrapper.get('textarea').setValue('{}');
+    await wrapper.get('[data-testid="call-tool"]').trigger('click');
+    await flushPromises();
+    await wrapper.get('[data-testid="copy-result"]').trigger('click');
+    await flushPromises();
+    expect(writeText).toHaveBeenCalledWith(JSON.stringify({ content: [{ type: 'text', text: 'hi' }] }, null, 2));
+    expect(wrapper.get('[data-testid="copy-result"]').text()).toBe('Copied');
   });
 });

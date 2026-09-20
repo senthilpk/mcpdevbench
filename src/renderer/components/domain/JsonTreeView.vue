@@ -14,7 +14,7 @@ const entries = computed<Array<[string, unknown]>>(() => {
   return Object.entries(props.data as Record<string, unknown>);
 });
 
-const expanded = ref(props.depth < 2);
+const expanded = ref(props.depth < 3);
 
 function formatPrimitive(value: unknown): string {
   if (value === null) return 'null';

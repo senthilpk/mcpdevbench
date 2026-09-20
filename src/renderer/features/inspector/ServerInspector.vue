@@ -1,9 +1,23 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { ArrowLeft } from '@lucide/vue';
+import JsonTreeView from '@/renderer/components/domain/JsonTreeView.vue';
 import { Button } from '@/renderer/components/ui/button';
 import { useServerWorkspace } from '@/renderer/features/servers/use-server-workspace';
 import type { ToolCallResult, ToolSummary } from '@/shared/domain/servers';
+
+type CallStatus = 'success' | 'tool-error' | 'call-failed';
+
+const STATUS_LABEL: Record<CallStatus, string> = {
+  success: 'Success',
+  'tool-error': 'Tool error',
+  'call-failed': 'Call failed',
+};
+const STATUS_DOT_CLASS: Record<CallStatus, string> = {
+  success: 'bg-success',
+  'tool-error': 'bg-warning',
+  'call-failed': 'bg-destructive',
+};
 
 const props = defineProps<{ profileId: string }>();
 const workspace = useServerWorkspace();
@@ -19,6 +33,12 @@ const argumentsError = ref<string>();
 const callPending = ref(false);
 const callError = ref<string>();
 const result = ref<ToolCallResult>();
+const callDurationMs = ref<number>();
+const callSizeBytes = ref<number>();
+const callStatus = ref<CallStatus>();
+const activeTab = ref<'structure' | 'raw'>('structure');
+const copied = ref(false);
+let copiedTimeout: ReturnType<typeof setTimeout> | undefined;
 
 function selectTool(tool: ToolSummary): void {
   selectedTool.value = tool;
@@ -26,6 +46,14 @@ function selectTool(tool: ToolSummary): void {
   argumentsError.value = undefined;
   callError.value = undefined;
   result.value = undefined;
+  callDurationMs.value = undefined;
+  callSizeBytes.value = undefined;
+  callStatus.value = undefined;
+  activeTab.value = 'structure';
+}
+
+function formatBytes(bytes: number): string {
+  return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
 }
 
 async function callTool(): Promise<void> {
@@ -49,13 +77,30 @@ async function callTool(): Promise<void> {
 
   callPending.value = true;
   result.value = undefined;
+  callDurationMs.value = undefined;
+  callSizeBytes.value = undefined;
+  callStatus.value = undefined;
+  activeTab.value = 'structure';
+  const startedAt = performance.now();
   try {
     result.value = await workspace.callTool(connectionId, tool.name, parsedArguments);
+    callStatus.value = result.value.isError ? 'tool-error' : 'success';
+    callSizeBytes.value = new TextEncoder().encode(JSON.stringify(result.value)).length;
   } catch {
     callError.value = 'Unable to call the tool';
+    callStatus.value = 'call-failed';
   } finally {
+    callDurationMs.value = Math.round(performance.now() - startedAt);
     callPending.value = false;
   }
+}
+
+async function copyResult(): Promise<void> {
+  if (!result.value) return;
+  await navigator.clipboard.writeText(JSON.stringify(result.value, null, 2));
+  copied.value = true;
+  clearTimeout(copiedTimeout);
+  copiedTimeout = setTimeout(() => { copied.value = false; }, 1500);
 }
 </script>
 
@@ -117,16 +162,48 @@ async function callTool(): Promise<void> {
 
         <p v-if="callError" role="alert" class="mt-3 text-sm text-destructive">{{ callError }}</p>
 
-        <div v-if="result" class="mt-4 border-t border-border pt-4">
-          <p v-if="result.isError" class="mb-2 text-xs font-medium text-warning">Tool reported an error</p>
-          <div v-for="(block, index) in result.content" :key="index" class="mb-2 text-sm">
-            <p v-if="block.type === 'text'" class="whitespace-pre-wrap break-words">{{ block.text }}</p>
-            <pre v-else class="overflow-auto text-xs">{{ JSON.stringify(block, null, 2) }}</pre>
+        <div v-if="callStatus" class="mt-4 border-t border-border pt-4">
+          <div class="mb-2 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-3 text-xs text-muted-foreground">
+              <span class="inline-flex items-center gap-1.5">
+                <span class="inline-block size-1.5 rounded-full" :class="STATUS_DOT_CLASS[callStatus]" aria-hidden="true" />
+                {{ STATUS_LABEL[callStatus] }}
+              </span>
+              <span v-if="callDurationMs !== undefined">{{ callDurationMs }} ms</span>
+              <span v-if="callSizeBytes !== undefined">{{ formatBytes(callSizeBytes) }}</span>
+            </div>
+            <Button v-if="result" size="sm" variant="outline" data-testid="copy-result" @click="copyResult">
+              {{ copied ? 'Copied' : 'Copy' }}
+            </Button>
           </div>
-          <details v-if="result.structuredContent !== undefined" class="mt-2 text-xs text-muted-foreground">
-            <summary class="cursor-pointer">Structured content</summary>
-            <pre class="mt-2 overflow-auto">{{ JSON.stringify(result.structuredContent, null, 2) }}</pre>
-          </details>
+
+          <template v-if="result">
+            <div class="flex gap-4 border-b border-border text-xs font-medium">
+              <button
+                type="button"
+                data-testid="tab-structure"
+                class="border-b-2 px-1 py-1.5"
+                :class="activeTab === 'structure' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'"
+                @click="activeTab = 'structure'"
+              >
+                Structure
+              </button>
+              <button
+                type="button"
+                data-testid="tab-raw"
+                class="border-b-2 px-1 py-1.5"
+                :class="activeTab === 'raw' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'"
+                @click="activeTab = 'raw'"
+              >
+                Raw
+              </button>
+            </div>
+
+            <div class="mt-3">
+              <JsonTreeView v-if="activeTab === 'structure'" data-testid="result-structure" :data="result" />
+              <pre v-else data-testid="result-raw" class="overflow-auto text-xs">{{ JSON.stringify(result, null, 2) }}</pre>
+            </div>
+          </template>
         </div>
       </div>
       <div v-else class="flex min-h-72 items-center justify-center border border-dashed border-border p-6 text-sm text-muted-foreground">

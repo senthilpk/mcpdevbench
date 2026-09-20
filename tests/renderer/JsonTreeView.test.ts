@@ -31,20 +31,21 @@ describe('JsonTreeView', () => {
   });
 
   it('collapses deeply nested nodes by default', () => {
-    const wrapper = mount(JsonTreeView, { props: { data: { a: { b: { deep: 'value' } } } } });
+    const wrapper = mount(JsonTreeView, { props: { data: { a: { b: { c: { deep: 'value' } } } } } });
     expect(wrapper.text()).not.toContain('deep');
   });
 
   it('toggles a node open and closed on click', async () => {
-    const wrapper = mount(JsonTreeView, { props: { data: { a: { b: { deep: 'value' } } } } });
+    const wrapper = mount(JsonTreeView, { props: { data: { a: { b: { c: { deep: 'value' } } } } } });
     // root(depth 0, expanded) -> "a"'s value container (depth 1, expanded) -> "b"'s value
-    // container (depth 2, collapsed by default) -- its toggle is the last button rendered.
+    // container (depth 2, expanded) -> "c"'s value container (depth 3, collapsed by default)
+    // -- its toggle is the last button rendered.
     const toggles = wrapper.findAll('button');
-    const bToggle = toggles.at(-1);
+    const cToggle = toggles.at(-1);
     expect(wrapper.text()).not.toContain('deep');
-    await bToggle?.trigger('click');
+    await cToggle?.trigger('click');
     expect(wrapper.text()).toContain('deep');
-    await bToggle?.trigger('click');
+    await cToggle?.trigger('click');
     expect(wrapper.text()).not.toContain('deep');
   });
 });
