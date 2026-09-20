@@ -122,7 +122,19 @@ describe('ServerInspector', () => {
     expect(wrapper.text()).toMatch(/\d+(\.\d+)? (B|KB)/);
   });
 
-  it('defaults to the Preview tab and switches to Raw on click, both scoped to content only', async () => {
+  it('defaults to the Preview tab, falling back to content when there is no structuredContent', async () => {
+    vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({ content: [{ type: 'text', text: 'hi' }] });
+    const wrapper = await mountInspector();
+    await wrapper.get('[data-testid="tool-echo"]').trigger('click');
+    await wrapper.get('textarea').setValue('{}');
+    await wrapper.get('[data-testid="call-tool"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-testid="result-preview"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="result-preview"]').text()).toContain('"hi"');
+    expect(wrapper.find('[data-testid="tab-structured-content"]').exists()).toBe(false);
+  });
+
+  it('shows structuredContent in Preview when the tool returns it, never both at once', async () => {
     vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({
       content: [{ type: 'text', text: 'hi' }],
       structuredContent: { count: 3 },
@@ -132,39 +144,24 @@ describe('ServerInspector', () => {
     await wrapper.get('textarea').setValue('{}');
     await wrapper.get('[data-testid="call-tool"]').trigger('click');
     await flushPromises();
-    expect(wrapper.find('[data-testid="result-preview"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="result-raw"]').exists()).toBe(false);
-    // Preview and Raw are both scoped to the content field -- structuredContent lives
-    // only in its own dedicated tab, not mixed into either of these.
-    expect(wrapper.get('[data-testid="result-preview"]').text()).not.toContain('count');
-
-    await wrapper.get('[data-testid="tab-raw"]').trigger('click');
-    expect(wrapper.find('[data-testid="result-preview"]').exists()).toBe(false);
-    expect(wrapper.get('[data-testid="result-raw"]').text()).toContain('"hi"');
-    expect(wrapper.get('[data-testid="result-raw"]').text()).not.toContain('count');
+    expect(wrapper.get('[data-testid="result-preview"]').text()).toContain('count');
+    expect(wrapper.get('[data-testid="result-preview"]').text()).not.toContain('"hi"');
   });
 
-  it('shows a Structured Content tab only when the tool actually returns it', async () => {
-    vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({ content: [{ type: 'text', text: 'hi' }] });
-    const wrapperWithout = await mountInspector();
-    await wrapperWithout.get('[data-testid="tool-echo"]').trigger('click');
-    await wrapperWithout.get('textarea').setValue('{}');
-    await wrapperWithout.get('[data-testid="call-tool"]').trigger('click');
-    await flushPromises();
-    expect(wrapperWithout.find('[data-testid="tab-structured-content"]').exists()).toBe(false);
-
+  it('Raw always shows the complete, unfiltered result exactly as the tool returned it', async () => {
     vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({
       content: [{ type: 'text', text: 'hi' }],
       structuredContent: { count: 3 },
     });
-    const wrapperWith = await mountInspector();
-    await wrapperWith.get('[data-testid="tool-echo"]').trigger('click');
-    await wrapperWith.get('textarea').setValue('{}');
-    await wrapperWith.get('[data-testid="call-tool"]').trigger('click');
+    const wrapper = await mountInspector();
+    await wrapper.get('[data-testid="tool-echo"]').trigger('click');
+    await wrapper.get('textarea').setValue('{}');
+    await wrapper.get('[data-testid="call-tool"]').trigger('click');
     await flushPromises();
-    await wrapperWith.get('[data-testid="tab-structured-content"]').trigger('click');
-    expect(wrapperWith.find('[data-testid="result-preview"]').exists()).toBe(false);
-    expect(wrapperWith.get('[data-testid="result-structured-content"]').text()).toContain('count');
+    await wrapper.get('[data-testid="tab-raw"]').trigger('click');
+    expect(wrapper.find('[data-testid="result-preview"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="result-raw"]').text()).toContain('"hi"');
+    expect(wrapper.get('[data-testid="result-raw"]').text()).toContain('count');
   });
 
   it('copies the raw result JSON to the clipboard when Copy is clicked', async () => {
