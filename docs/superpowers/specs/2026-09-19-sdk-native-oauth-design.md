@@ -206,3 +206,41 @@ Renderer tests cover waiting, reopening, cancellation, completion, session-only 
 - Custom URI-scheme callbacks and ephemeral callback ports.
 - A general OAuth protocol debugger or multi-version conformance mode.
 - Renderer-visible authorization-server metadata and token inspection.
+
+## 13. Known Limitations (Post-Implementation)
+
+Identified during the final whole-branch review after all seven implementation tasks
+completed. None block the completion criteria in section 11; each is a narrow edge case
+worth fixing opportunistically rather than urgently.
+
+- **Issuer-key alignment for path-based authorization servers.** `OAuthRecordStore.saveTokens`
+  keys a grant by `canonicalize(ctx.issuer)`, while `saveDiscoveryState` mirrors authorization-
+  server metadata under `canonicalize(value.authorizationServerUrl)`. The SDK itself tolerates a
+  single trailing-slash difference between an authorization server's published `issuer` and the
+  discovery URL (`issuersMatch` in `@modelcontextprotocol/client`); `OAuthRecordStore`'s plain
+  `new URL(x).toString()` canonicalization does not. For an authorization server whose issuer is
+  a non-root path that differs from the discovery URL by exactly a trailing slash, tokens and the
+  revocation endpoint could land on two different issuer records, and sign-out would silently
+  report `revocation: 'unavailable'` instead of actually revoking. Origin-only issuers (the common
+  case) are unaffected. Fix: also key the mirrored authorization-server metadata by
+  `value.authorizationServerMetadata.issuer` when present, alongside the existing
+  `authorizationServerUrl` key.
+- **`OAuthRecordStore.saveClientInformation` is unused in production.** `McpOAuthProvider`
+  deliberately never implements the SDK's optional `saveClientInformation` (this is what blocks
+  silent Dynamic Client Registration), so nothing ever calls this method outside tests. It is not
+  incorrect, just dead in the current CIMD-only slice — worth a code comment so a future reader
+  does not assume the persistence path is exercised in production, or worth revisiting if a future
+  slice adds DCR support.
+- **The hosted CIMD document and `McpOAuthProvider.clientMetadata` are duplicated with nothing
+  binding them together.** `site/oauth/client-id.json` (served from GitHub Pages) and the
+  provider's in-code `clientMetadata` getter must agree field-for-field (redirect URI, grant
+  types, response types, `token_endpoint_auth_method`, `application_type`) for real authorization
+  servers to accept this application consistently. They currently agree, but nothing would fail if
+  one side changed without the other (e.g. the loopback port or a grant type). Fix: add a test that
+  reads `site/oauth/client-id.json` and asserts it matches `McpOAuthProvider.clientMetadata`.
+- **`ConnectionManager.signOut` reports `localCredentialsRemoved: true` for a STDIO profile or a
+  profile ID that no longer exists**, even though nothing was actually stored or removed. Harmless
+  today because the renderer only ever offers **Sign out** on a connected, authorized Streamable
+  HTTP row, but the contract is slightly dishonest for a hypothetical direct IPC caller. Fix:
+  return a distinct result (or reject) for a non-existent/non-HTTP profile rather than reporting
+  success.
