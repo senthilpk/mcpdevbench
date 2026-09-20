@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { ArrowLeft } from '@lucide/vue';
 import JsonTreeView from '@/renderer/components/domain/JsonTreeView.vue';
 import { Button } from '@/renderer/components/ui/button';
+import { formatBytes, formatDuration } from '@/renderer/lib/format';
 import { useServerWorkspace } from '@/renderer/features/servers/use-server-workspace';
 import type { ToolCallResult, ToolSummary } from '@/shared/domain/servers';
 
@@ -52,10 +53,6 @@ function selectTool(tool: ToolSummary): void {
   callSizeBytes.value = undefined;
   callStatus.value = undefined;
   activeTab.value = 'preview';
-}
-
-function formatBytes(bytes: number): string {
-  return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
 }
 
 async function callTool(): Promise<void> {
@@ -171,7 +168,7 @@ async function copyResult(): Promise<void> {
                 <span class="inline-block size-1.5 rounded-full" :class="STATUS_DOT_CLASS[callStatus]" aria-hidden="true" />
                 {{ STATUS_LABEL[callStatus] }}
               </span>
-              <span v-if="callDurationMs !== undefined">{{ callDurationMs }} ms</span>
+              <span v-if="callDurationMs !== undefined">{{ formatDuration(callDurationMs) }}</span>
               <span v-if="callSizeBytes !== undefined">{{ formatBytes(callSizeBytes) }}</span>
             </div>
             <Button v-if="result" size="sm" variant="outline" data-testid="copy-result" @click="copyResult">

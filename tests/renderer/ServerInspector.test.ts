@@ -122,6 +122,17 @@ describe('ServerInspector', () => {
     expect(wrapper.text()).toMatch(/\d+(\.\d+)? (B|KB)/);
   });
 
+  it('formats a result over 1 MB in size as MB, not thousands of KB', async () => {
+    const megabyteOfText = 'x'.repeat(1024 * 1024 + 1);
+    vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({ content: [{ type: 'text', text: megabyteOfText }] });
+    const wrapper = await mountInspector();
+    await wrapper.get('[data-testid="tool-echo"]').trigger('click');
+    await wrapper.get('textarea').setValue('{}');
+    await wrapper.get('[data-testid="call-tool"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.text()).toMatch(/\d+(\.\d+)? MB/);
+  });
+
   it('defaults to the Preview tab, falling back to content when there is no structuredContent', async () => {
     vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({ content: [{ type: 'text', text: 'hi' }] });
     const wrapper = await mountInspector();
