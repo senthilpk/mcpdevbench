@@ -4,6 +4,7 @@ import type {
   ResourceSummary,
   ResourceTemplateSummary,
   ServerProfile,
+  ToolCallResult,
   ToolSummary,
 } from '@/shared/domain/servers';
 
@@ -50,6 +51,7 @@ export interface McpClientPort {
   listResources(): Promise<ResourceSummary[]>;
   listResourceTemplates(): Promise<ResourceTemplateSummary[]>;
   listPrompts(): Promise<PromptSummary[]>;
+  callTool(name: string, args?: Record<string, unknown>): Promise<ToolCallResult>;
   /**
    * Completes an interactive OAuth callback on this port's transport. Only meaningful for
    * `streamable-http` profiles constructed with an `authProvider`; optional so ports that

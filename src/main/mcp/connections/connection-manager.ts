@@ -22,6 +22,7 @@ import type {
   ConnectionState,
   ServerProfile,
   SignOutResult,
+  ToolCallResult,
 } from '@/shared/domain/servers';
 
 /**
@@ -98,6 +99,7 @@ const INERT_CLIENT: McpClientPort = {
   listResourceTemplates: () => Promise.resolve([]),
   listPrompts: () => Promise.resolve([]),
   finishAuthorization: () => Promise.reject(new Error('Connection not initialized yet')),
+  callTool: () => Promise.reject(new Error('Connection not initialized yet')),
 };
 
 export class ConnectionManager {
@@ -186,6 +188,12 @@ export class ConnectionManager {
     const discovery = await discoverCatalogs(session.client);
     this.update(session, { ...discovery, state: 'ready' });
     return structuredClone(session.snapshot);
+  }
+
+  async callTool(connectionId: string, name: string, args?: Record<string, unknown>): Promise<ToolCallResult> {
+    const session = this.requireSession(connectionId);
+    if (session.snapshot.state !== 'ready') throw new Error('Connection is not ready');
+    return session.client.callTool(name, args);
   }
 
   async reopenAuthorization(connectionId: string): Promise<ConnectionSnapshot> {

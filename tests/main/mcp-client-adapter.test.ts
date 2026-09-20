@@ -15,6 +15,7 @@ function fakeSdkClient(overrides: Partial<Record<string, unknown>> = {}) {
     listResources: async () => ({ resources: [] }),
     listResourceTemplates: async () => ({ resourceTemplates: [] }),
     listPrompts: async () => ({ prompts: [] }),
+    callTool: vi.fn(),
     ...overrides,
   };
 }
@@ -37,6 +38,7 @@ describe('McpClientAdapter', () => {
       listResources: async () => ({ resources: [] }),
       listResourceTemplates: async () => ({ resourceTemplates: [] }),
       listPrompts: async () => ({ prompts: [] }),
+      callTool: vi.fn(),
     };
     const deps: AdapterDependencies = { create: () => ({ client, transport: {} as never }) };
     const adapter = new McpClientAdapter({ id: 'p1', name: 'x', transport: 'stdio', command: 'node', args: [] }, deps);
@@ -53,6 +55,7 @@ describe('McpClientAdapter', () => {
       getNegotiatedProtocolVersion: () => undefined, getInstructions: () => undefined,
       listTools: async () => ({ tools: [] }), listResources: async () => ({ resources: [] }),
       listResourceTemplates: async () => ({ resourceTemplates: [] }), listPrompts: async () => ({ prompts: [] }),
+      callTool: vi.fn(),
     };
     const deps: AdapterDependencies = { create: () => ({ client, transport: {} as never, terminateSession: async () => { order.push('terminate'); } }) };
     const adapter = new McpClientAdapter({ id: 'p1', name: 'x', transport: 'streamable-http', url: 'https://example.test/mcp' }, deps);
@@ -150,5 +153,49 @@ describe('McpClientAdapter', () => {
     expect(create.mock.calls[0]?.[1]).toBe(authProvider);
     expect(create.mock.calls[1]?.[1]).toBe(authProvider);
     expect(create.mock.calls[0]?.[1]).toBe(create.mock.calls[1]?.[1]);
+  });
+
+  it('maps a successful tool call into the normalized result shape', async () => {
+    const client = fakeSdkClient({
+      callTool: vi.fn().mockResolvedValue({
+        content: [
+          { type: 'text', text: 'hi', annotations: { audience: ['user'] } },
+          { type: 'resource_link', uri: 'file:///a.txt', name: 'a', extra: 'ignored' },
+          { type: 'resource', resource: { uri: 'file:///b.txt', text: 'body' } },
+        ],
+        structuredContent: { count: 1 },
+      }),
+    });
+    const deps: AdapterDependencies = { create: () => ({ client, transport: {} as never }) };
+    const adapter = new McpClientAdapter({ id: 'p1', name: 'x', transport: 'stdio', command: 'node', args: [] }, deps);
+    const result = await adapter.callTool('echo', { message: 'hi' });
+    expect(client.callTool).toHaveBeenCalledWith({ name: 'echo', arguments: { message: 'hi' } });
+    expect(result).toEqual({
+      content: [
+        { type: 'text', text: 'hi' },
+        { type: 'resource_link', uri: 'file:///a.txt', name: 'a' },
+        { type: 'resource', uri: 'file:///b.txt', text: 'body' },
+      ],
+      structuredContent: { count: 1 },
+    });
+  });
+
+  it('passes through isError on a tool-level failure without throwing', async () => {
+    const client = fakeSdkClient({
+      callTool: vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'boom' }], isError: true }),
+    });
+    const deps: AdapterDependencies = { create: () => ({ client, transport: {} as never }) };
+    const adapter = new McpClientAdapter({ id: 'p1', name: 'x', transport: 'stdio', command: 'node', args: [] }, deps);
+    await expect(adapter.callTool('boom')).resolves.toEqual({
+      content: [{ type: 'text', text: 'boom' }],
+      isError: true,
+    });
+  });
+
+  it('propagates a transport failure from callTool unchanged', async () => {
+    const client = fakeSdkClient({ callTool: vi.fn().mockRejectedValue(new Error('disconnected')) });
+    const deps: AdapterDependencies = { create: () => ({ client, transport: {} as never }) };
+    const adapter = new McpClientAdapter({ id: 'p1', name: 'x', transport: 'stdio', command: 'node', args: [] }, deps);
+    await expect(adapter.callTool('echo')).rejects.toThrow('disconnected');
   });
 });

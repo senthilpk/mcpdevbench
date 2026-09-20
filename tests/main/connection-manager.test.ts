@@ -35,6 +35,7 @@ function createClient(capabilities: Record<string, unknown> = { tools: {} }) {
     listResourceTemplates: vi.fn().mockResolvedValue([]),
     listPrompts: vi.fn().mockResolvedValue([]),
     finishAuthorization: vi.fn(),
+    callTool: vi.fn(),
   };
   return client;
 }
@@ -113,6 +114,30 @@ describe('ConnectionManager', () => {
     expect(stopped.state).toBe('disconnected');
     expect(manager.list()).toEqual([]);
     await expect(manager.refresh('missing')).rejects.toThrow('Connection not found');
+  });
+
+  it('calls a tool on a ready connection and returns the normalized result', async () => {
+    const client = createClient();
+    client.callTool = vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'hi' }] });
+    const manager = new ConnectionManager(createStore(), () => client);
+    const started = await manager.connect('p1');
+    await vi.waitFor(() => expect(manager.list()[0]?.state).toBe('ready'));
+    const result = await manager.callTool(started.connectionId, 'echo', { message: 'hi' });
+    expect(client.callTool).toHaveBeenCalledWith('echo', { message: 'hi' });
+    expect(result).toEqual({ content: [{ type: 'text', text: 'hi' }] });
+  });
+
+  it('rejects a tool call when the connection is not ready', async () => {
+    const client = createClient();
+    client.connect = vi.fn(() => new Promise(() => {})); // never resolves; connection stays 'connecting'/'initializing'
+    const manager = new ConnectionManager(createStore(), () => client);
+    const started = await manager.connect('p1');
+    await expect(manager.callTool(started.connectionId, 'echo')).rejects.toThrow('Connection is not ready');
+  });
+
+  it('rejects a tool call for an unknown connection id', async () => {
+    const manager = new ConnectionManager(createStore(), () => createClient());
+    await expect(manager.callTool('missing', 'echo')).rejects.toThrow('Connection not found');
   });
 
   it('makes repeated disconnects idempotent', async () => {

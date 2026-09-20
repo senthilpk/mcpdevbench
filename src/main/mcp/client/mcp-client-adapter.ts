@@ -17,6 +17,8 @@ import type {
   ResourceSummary,
   ResourceTemplateSummary,
   ServerProfile,
+  ToolCallResult,
+  ToolContentBlock,
   ToolSummary,
 } from '@/shared/domain/servers';
 
@@ -42,6 +44,11 @@ type SdkClientLike = {
   listResources(): Promise<{ resources: Array<{ uri: string; name: string; description?: string | undefined; mimeType?: string | undefined }> }>;
   listResourceTemplates(): Promise<{ resourceTemplates: Array<{ uriTemplate: string; name: string; description?: string | undefined; mimeType?: string | undefined }> }>;
   listPrompts(): Promise<{ prompts: Array<{ name: string; description?: string | undefined; arguments?: Array<{ name: string; description?: string | undefined; required?: boolean | undefined }> | undefined }> }>;
+  callTool(params: { name: string; arguments?: Record<string, unknown> | undefined }): Promise<{
+    content: Array<Record<string, unknown> & { type: string }>;
+    structuredContent?: unknown;
+    isError?: boolean | undefined;
+  }>;
 };
 
 type FinishAuth = (params: URLSearchParams) => Promise<void>;
@@ -164,6 +171,15 @@ export class McpClientAdapter implements McpClientPort {
       })),
     }));
   }
+
+  async callTool(name: string, args?: Record<string, unknown>): Promise<ToolCallResult> {
+    const result = await this.bundle.client.callTool(args !== undefined ? { name, arguments: args } : { name });
+    return {
+      content: result.content.map(mapContentBlock),
+      ...(result.structuredContent !== undefined ? { structuredContent: result.structuredContent } : {}),
+      ...(result.isError !== undefined ? { isError: result.isError } : {}),
+    };
+  }
 }
 
 export const createMcpClient = (profile: ServerProfile, authProvider?: OAuthClientProvider): McpClientPort =>
@@ -187,4 +203,45 @@ function mapSdkAuthError(error: unknown): unknown {
   if (error instanceof UnauthorizedError) return new McpAuthorizationRequiredError();
   if (error instanceof Error && error.message === CIMD_UNSUPPORTED_MESSAGE) return new McpCimdUnsupportedError();
   return error;
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function mapContentBlock(block: Record<string, unknown> & { type: string }): ToolContentBlock {
+  switch (block.type) {
+    case 'text':
+      return { type: 'text', text: asString(block.text) ?? '' };
+    case 'image':
+      return { type: 'image', data: asString(block.data) ?? '', mimeType: asString(block.mimeType) ?? '' };
+    case 'audio':
+      return { type: 'audio', data: asString(block.data) ?? '', mimeType: asString(block.mimeType) ?? '' };
+    case 'resource_link': {
+      const description = asString(block.description);
+      const mimeType = asString(block.mimeType);
+      return {
+        type: 'resource_link',
+        uri: asString(block.uri) ?? '',
+        name: asString(block.name) ?? '',
+        ...(description !== undefined ? { description } : {}),
+        ...(mimeType !== undefined ? { mimeType } : {}),
+      };
+    }
+    case 'resource': {
+      const resource = (block.resource ?? {}) as Record<string, unknown>;
+      const mimeType = asString(resource.mimeType);
+      const text = asString(resource.text);
+      const blob = asString(resource.blob);
+      return {
+        type: 'resource',
+        uri: asString(resource.uri) ?? '',
+        ...(mimeType !== undefined ? { mimeType } : {}),
+        ...(text !== undefined ? { text } : {}),
+        ...(blob !== undefined ? { blob } : {}),
+      };
+    }
+    default:
+      return { type: 'text', text: '' };
+  }
 }
