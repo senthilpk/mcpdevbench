@@ -122,33 +122,7 @@ describe('ServerInspector', () => {
     expect(wrapper.text()).toMatch(/\d+(\.\d+)? (B|KB)/);
   });
 
-  it('defaults to the Structure tab and switches to Raw on click', async () => {
-    vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({ content: [{ type: 'text', text: 'hi' }] });
-    const wrapper = await mountInspector();
-    await wrapper.get('[data-testid="tool-echo"]').trigger('click');
-    await wrapper.get('textarea').setValue('{}');
-    await wrapper.get('[data-testid="call-tool"]').trigger('click');
-    await flushPromises();
-    expect(wrapper.find('[data-testid="result-structure"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="result-raw"]').exists()).toBe(false);
-
-    await wrapper.get('[data-testid="tab-raw"]').trigger('click');
-    expect(wrapper.find('[data-testid="result-structure"]').exists()).toBe(false);
-    expect(wrapper.get('[data-testid="result-raw"]').text()).toContain('"hi"');
-  });
-
-  it('labels the content section and hides the structured-content section when absent', async () => {
-    vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({ content: [{ type: 'text', text: 'hi' }] });
-    const wrapper = await mountInspector();
-    await wrapper.get('[data-testid="tool-echo"]').trigger('click');
-    await wrapper.get('textarea').setValue('{}');
-    await wrapper.get('[data-testid="call-tool"]').trigger('click');
-    await flushPromises();
-    expect(wrapper.text()).toContain('Content');
-    expect(wrapper.find('[data-testid="structured-content-section"]').exists()).toBe(false);
-  });
-
-  it('labels the structured-content section distinctly when present', async () => {
+  it('defaults to the Preview tab (content only) and switches to Raw on click', async () => {
     vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({
       content: [{ type: 'text', text: 'hi' }],
       structuredContent: { count: 3 },
@@ -158,9 +132,15 @@ describe('ServerInspector', () => {
     await wrapper.get('textarea').setValue('{}');
     await wrapper.get('[data-testid="call-tool"]').trigger('click');
     await flushPromises();
-    const section = wrapper.get('[data-testid="structured-content-section"]');
-    expect(section.text()).toContain('Structured Content');
-    expect(section.text()).toContain('count');
+    expect(wrapper.find('[data-testid="result-preview"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="result-raw"]').exists()).toBe(false);
+    // Preview shows only the content field -- structuredContent is a Raw-only detail.
+    expect(wrapper.get('[data-testid="result-preview"]').text()).not.toContain('count');
+
+    await wrapper.get('[data-testid="tab-raw"]').trigger('click');
+    expect(wrapper.find('[data-testid="result-preview"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="result-raw"]').text()).toContain('"hi"');
+    expect(wrapper.get('[data-testid="result-raw"]').text()).toContain('count');
   });
 
   it('copies the raw result JSON to the clipboard when Copy is clicked', async () => {

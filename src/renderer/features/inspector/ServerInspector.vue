@@ -36,7 +36,7 @@ const result = ref<ToolCallResult>();
 const callDurationMs = ref<number>();
 const callSizeBytes = ref<number>();
 const callStatus = ref<CallStatus>();
-const activeTab = ref<'structure' | 'raw'>('structure');
+const activeTab = ref<'preview' | 'raw'>('preview');
 const copied = ref(false);
 let copiedTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -49,7 +49,7 @@ function selectTool(tool: ToolSummary): void {
   callDurationMs.value = undefined;
   callSizeBytes.value = undefined;
   callStatus.value = undefined;
-  activeTab.value = 'structure';
+  activeTab.value = 'preview';
 }
 
 function formatBytes(bytes: number): string {
@@ -80,7 +80,7 @@ async function callTool(): Promise<void> {
   callDurationMs.value = undefined;
   callSizeBytes.value = undefined;
   callStatus.value = undefined;
-  activeTab.value = 'structure';
+  activeTab.value = 'preview';
   const startedAt = performance.now();
   try {
     result.value = await workspace.callTool(connectionId, tool.name, parsedArguments);
@@ -181,12 +181,12 @@ async function copyResult(): Promise<void> {
             <div class="flex gap-4 border-b border-border text-xs font-medium">
               <button
                 type="button"
-                data-testid="tab-structure"
+                data-testid="tab-preview"
                 class="border-b-2 px-1 py-1.5"
-                :class="activeTab === 'structure' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'"
-                @click="activeTab = 'structure'"
+                :class="activeTab === 'preview' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'"
+                @click="activeTab = 'preview'"
               >
-                Structure
+                Preview
               </button>
               <button
                 type="button"
@@ -200,17 +200,7 @@ async function copyResult(): Promise<void> {
             </div>
 
             <div class="mt-3">
-              <div v-if="activeTab === 'structure'" data-testid="result-structure">
-                <p class="text-xs font-medium uppercase text-muted-foreground">Content</p>
-                <p class="mb-2 text-xs text-muted-foreground">Blocks meant for display to a human or LLM.</p>
-                <JsonTreeView :data="result.content" />
-
-                <div v-if="result.structuredContent !== undefined" data-testid="structured-content-section" class="mt-4">
-                  <p class="text-xs font-medium uppercase text-muted-foreground">Structured Content</p>
-                  <p class="mb-2 text-xs text-muted-foreground">Machine-readable data matching the tool's output schema.</p>
-                  <JsonTreeView :data="result.structuredContent" />
-                </div>
-              </div>
+              <JsonTreeView v-if="activeTab === 'preview'" data-testid="result-preview" :data="result.content" />
               <pre v-else data-testid="result-raw" class="overflow-auto text-xs">{{ JSON.stringify(result, null, 2) }}</pre>
             </div>
           </template>
