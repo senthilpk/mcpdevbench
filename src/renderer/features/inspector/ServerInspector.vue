@@ -216,7 +216,7 @@ async function copyResult(): Promise<void> {
                 data-testid="result-structured-content"
                 :data="result.structuredContent"
               />
-              <pre v-else data-testid="result-raw" class="overflow-auto text-xs">{{ JSON.stringify(result, null, 2) }}</pre>
+              <pre v-else data-testid="result-raw" class="overflow-auto text-xs">{{ JSON.stringify(result.content, null, 2) }}</pre>
             </div>
           </template>
         </div>

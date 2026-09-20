@@ -122,7 +122,7 @@ describe('ServerInspector', () => {
     expect(wrapper.text()).toMatch(/\d+(\.\d+)? (B|KB)/);
   });
 
-  it('defaults to the Preview tab (content only) and switches to Raw on click', async () => {
+  it('defaults to the Preview tab and switches to Raw on click, both scoped to content only', async () => {
     vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({
       content: [{ type: 'text', text: 'hi' }],
       structuredContent: { count: 3 },
@@ -134,13 +134,14 @@ describe('ServerInspector', () => {
     await flushPromises();
     expect(wrapper.find('[data-testid="result-preview"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="result-raw"]').exists()).toBe(false);
-    // Preview shows only the content field -- structuredContent is a Raw-only detail.
+    // Preview and Raw are both scoped to the content field -- structuredContent lives
+    // only in its own dedicated tab, not mixed into either of these.
     expect(wrapper.get('[data-testid="result-preview"]').text()).not.toContain('count');
 
     await wrapper.get('[data-testid="tab-raw"]').trigger('click');
     expect(wrapper.find('[data-testid="result-preview"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="result-raw"]').text()).toContain('"hi"');
-    expect(wrapper.get('[data-testid="result-raw"]').text()).toContain('count');
+    expect(wrapper.get('[data-testid="result-raw"]').text()).not.toContain('count');
   });
 
   it('shows a Structured Content tab only when the tool actually returns it', async () => {
