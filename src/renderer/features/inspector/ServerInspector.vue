@@ -72,7 +72,7 @@ async function callTool(): Promise<void> {
     >
       Connect this server to see and call its tools.
     </div>
-    <div v-else class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
+    <div v-else class="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
       <div class="border border-border bg-card">
         <ul>
           <li v-for="tool in tools" :key="tool.name">
@@ -83,8 +83,8 @@ async function callTool(): Promise<void> {
               :class="selectedTool?.name === tool.name && 'bg-muted'"
               @click="selectTool(tool)"
             >
-              <div class="font-mono text-sm font-medium">{{ tool.name }}</div>
-              <div v-if="tool.description" class="mt-1 text-xs text-muted-foreground">{{ tool.description }}</div>
+              <div class="break-words font-mono text-sm font-medium">{{ tool.name }}</div>
+              <div v-if="tool.description" class="mt-1 break-words text-xs text-muted-foreground">{{ tool.description }}</div>
             </button>
           </li>
         </ul>
@@ -93,8 +93,8 @@ async function callTool(): Promise<void> {
         </p>
       </div>
 
-      <div v-if="selectedTool" class="border border-border bg-card p-4">
-        <h3 class="font-mono text-sm font-medium">{{ selectedTool.name }}</h3>
+      <div v-if="selectedTool" class="min-h-72 border border-border bg-card p-4">
+        <h3 class="break-words font-mono text-sm font-medium">{{ selectedTool.name }}</h3>
         <details class="mt-2 text-xs text-muted-foreground">
           <summary class="cursor-pointer">Input schema</summary>
           <pre class="mt-2 overflow-auto">{{ JSON.stringify(selectedTool.inputSchema, null, 2) }}</pre>
@@ -120,7 +120,7 @@ async function callTool(): Promise<void> {
         <div v-if="result" class="mt-4 border-t border-border pt-4">
           <p v-if="result.isError" class="mb-2 text-xs font-medium text-warning">Tool reported an error</p>
           <div v-for="(block, index) in result.content" :key="index" class="mb-2 text-sm">
-            <p v-if="block.type === 'text'" class="whitespace-pre-wrap">{{ block.text }}</p>
+            <p v-if="block.type === 'text'" class="whitespace-pre-wrap break-words">{{ block.text }}</p>
             <pre v-else class="overflow-auto text-xs">{{ JSON.stringify(block, null, 2) }}</pre>
           </div>
           <details v-if="result.structuredContent !== undefined" class="mt-2 text-xs text-muted-foreground">
@@ -129,7 +129,7 @@ async function callTool(): Promise<void> {
           </details>
         </div>
       </div>
-      <div v-else class="flex items-center justify-center border border-dashed border-border p-6 text-sm text-muted-foreground">
+      <div v-else class="flex min-h-72 items-center justify-center border border-dashed border-border p-6 text-sm text-muted-foreground">
         Select a tool to call it.
       </div>
     </div>

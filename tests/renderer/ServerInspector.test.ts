@@ -64,6 +64,29 @@ describe('ServerInspector', () => {
     expect(wrapper.text()).toContain('hello back');
   });
 
+  it('wraps result text instead of letting it overflow past the panel border', async () => {
+    const longWord = 'x'.repeat(200);
+    vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({ content: [{ type: 'text', text: longWord }] });
+    const wrapper = await mountInspector();
+    await wrapper.get('[data-testid="tool-echo"]').trigger('click');
+    await wrapper.get('textarea').setValue('{}');
+    await wrapper.get('[data-testid="call-tool"]').trigger('click');
+    await flushPromises();
+    const resultText = wrapper.findAll('p').find((p) => p.text() === longWord);
+    expect(resultText?.classes()).toContain('break-words');
+  });
+
+  it('gives the placeholder and selected-tool panels the same minimum height', async () => {
+    const wrapperBefore = await mountInspector();
+    const placeholder = wrapperBefore.get('div.flex.min-h-72');
+    expect(placeholder.classes()).toContain('min-h-72');
+
+    const wrapperAfter = await mountInspector();
+    await wrapperAfter.get('[data-testid="tool-echo"]').trigger('click');
+    const detailPanel = wrapperAfter.findAll('div.border.border-border.bg-card').find((div) => div.find('h3').exists());
+    expect(detailPanel?.classes()).toContain('min-h-72');
+  });
+
   it('renders isError results as data, not as an application error', async () => {
     vi.mocked(window.mcpdevbench.callTool).mockResolvedValue({ content: [{ type: 'text', text: 'bad input' }], isError: true });
     const wrapper = await mountInspector();
