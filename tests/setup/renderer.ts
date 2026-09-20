@@ -14,6 +14,10 @@ Object.defineProperty(window, 'mcpdevbench', {
     connect: vi.fn(),
     disconnect: vi.fn(),
     refresh: vi.fn(),
+    reopenAuthorization: vi.fn(),
+    cancelAuthorization: vi.fn(),
+    signOut: vi.fn(),
+    callTool: vi.fn(),
     onConnectionsChanged: vi.fn().mockReturnValue(vi.fn()),
   },
 });

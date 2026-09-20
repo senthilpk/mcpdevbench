@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ExternalLink, LogOut, Plug, RefreshCw, Trash2, Unplug, X } from '@lucide/vue';
+import { ExternalLink, Eye, LogOut, Plug, RefreshCw, Trash2, Unplug, X } from '@lucide/vue';
 import ConnectionStatus from '@/renderer/components/domain/ConnectionStatus.vue';
 import EmptyServerState from '@/renderer/components/domain/EmptyServerState.vue';
 import { Button } from '@/renderer/components/ui/button';
@@ -16,6 +16,7 @@ defineEmits<{
   reopenAuthorization: [connectionId: string];
   cancelAuthorization: [connectionId: string];
   signOut: [profileId: string];
+  view: [profileId: string];
 }>();
 </script>
 
@@ -46,6 +47,7 @@ defineEmits<{
               <Button v-show="server.authorization.canCancel" size="icon-sm" variant="ghost" :aria-label="`Cancel authorization for ${server.name}`" @click="$emit('cancelAuthorization', server.connectionId)"><X /></Button>
             </template>
             <template v-if="server.connectionId && server.state === 'connected'">
+              <Button size="icon-sm" variant="ghost" :aria-label="`View ${server.name}`" @click="$emit('view', server.id)"><Eye /></Button>
               <Button size="icon-sm" variant="ghost" :aria-label="`Refresh ${server.name}`" @click="$emit('refresh', server.connectionId)"><RefreshCw /></Button>
               <Button size="icon-sm" variant="ghost" :aria-label="`Disconnect ${server.name}`" @click="$emit('disconnect', server.connectionId)"><Unplug /></Button>
               <Button v-if="server.authorization?.status === 'authorized'" size="icon-sm" variant="ghost" :aria-label="`Sign out ${server.name}`" @click="$emit('signOut', server.id)"><LogOut /></Button>

@@ -26,6 +26,14 @@ describe('ServerTable', () => {
     expect(wrapper.get('[data-testid="empty-servers"]').text()).toContain('No servers configured');
     expect(wrapper.get('button').text()).toContain('Add server');
   });
+
+  it('shows a View action only for connected servers and emits the profile id', async () => {
+    const wrapper = mount(ServerTable, { props: { servers } });
+    expect(wrapper.find('button[aria-label="View TVEyes Local"]').exists()).toBe(true);
+    expect(wrapper.find('button[aria-label="View Search MCP"]').exists()).toBe(false);
+    await wrapper.get('button[aria-label="View TVEyes Local"]').trigger('click');
+    expect(wrapper.emitted('view')).toEqual([['tveyes']]);
+  });
 });
 
 const requiredAuth: AuthorizationSnapshot = { status: 'required', storage: 'persistent', canReopenBrowser: false, canCancel: false };

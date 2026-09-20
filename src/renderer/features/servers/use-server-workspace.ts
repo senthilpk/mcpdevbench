@@ -85,6 +85,8 @@ export function useServerWorkspace() {
   const reopenAuthorization = async (connectionId: string) => { await window.mcpdevbench.reopenAuthorization(connectionId); };
   const cancelAuthorization = async (connectionId: string) => { await window.mcpdevbench.cancelAuthorization(connectionId); };
   const signOut = async (profileId: string): Promise<SignOutResult> => window.mcpdevbench.signOut(profileId);
+  const callTool = (connectionId: string, name: string, args?: Record<string, unknown>) =>
+    window.mcpdevbench.callTool(connectionId, name, args);
   const remove = async (profileId: string) => {
     await window.mcpdevbench.deleteProfile(profileId);
     profiles.value = profiles.value.filter((profile) => profile.id !== profileId);
@@ -102,7 +104,7 @@ export function useServerWorkspace() {
     profiles: readonly(profiles), connections: readonly(connections), rows,
     loading: readonly(loading), error: readonly(error), metrics,
     load, save, connect, disconnect, refresh, remove,
-    reopenAuthorization, cancelAuthorization, signOut,
+    reopenAuthorization, cancelAuthorization, signOut, callTool,
   };
 }
 

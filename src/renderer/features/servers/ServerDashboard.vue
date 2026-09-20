@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Plus, RotateCw } from '@lucide/vue';
 import { ref } from 'vue';
+import { useRouter } from 'vue-router';
 import Metric from '@/renderer/components/domain/Metric.vue';
 import ServerTable from '@/renderer/components/domain/ServerTable.vue';
 import { Button } from '@/renderer/components/ui/button';
@@ -10,6 +11,7 @@ import { useServerWorkspace } from '@/renderer/features/servers/use-server-works
 import type { SaveServerProfileInput } from '@/shared/domain/servers';
 
 const workspace = useServerWorkspace();
+const router = useRouter();
 const addOpen = ref(false);
 const saving = ref(false);
 const actionError = ref<string>();
@@ -37,6 +39,9 @@ async function signOut(profileId: string): Promise<void> {
     const result = await workspace.signOut(profileId);
     if (result.warning) signOutWarning.value = `${serverName}: ${result.warning}`;
   });
+}
+function viewServer(profileId: string): void {
+  void router.push(`/servers/${profileId}`);
 }
 </script>
 
@@ -67,6 +72,7 @@ async function signOut(profileId: string): Promise<void> {
         @reopen-authorization="run(() => workspace.reopenAuthorization($event))"
         @cancel-authorization="run(() => workspace.cancelAuthorization($event))"
         @sign-out="signOut($event)"
+        @view="viewServer($event)"
       />
     </section>
     <AddServerSheet v-model:open="addOpen" :pending="saving" @save="save" />
