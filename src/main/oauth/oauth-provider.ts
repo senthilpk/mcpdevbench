@@ -94,8 +94,36 @@ export class McpOAuthProvider implements OAuthClientProvider {
     return this.currentState;
   }
 
+  /**
+   * Returns the record store's persisted client information when present, else -- for a
+   * CIMD-confirmed issuer only -- synthesizes the stable `{ client_id: clientMetadataUrl,
+   * issuer }` value the SDK itself would otherwise construct via `saveClientInformation`.
+   *
+   * This provider deliberately never implements `saveClientInformation` (see the class doc
+   * comment), so the SDK's own CIMD-branch write (`await provider.saveClientInformation?.(...)`
+   * in `auth()`) is a silent no-op and nothing persists between the redirect leg and the
+   * code-exchange leg of the same interactive attempt. Both legs run on this SAME provider
+   * instance (`OAuthCoordinator` constructs exactly one per attempt) and, by the time either
+   * calls `clientInformation()`, discovery has already saved `authorizationServerMetadata` for
+   * this resource (via `saveDiscoveryState`, called earlier in the SDK's own `auth()` before
+   * `clientInformation()` ever runs) -- so re-deriving CIMD support from that persisted
+   * metadata, rather than from provider-instance memory, is safe even across the probe
+   * provider (Task 4's cascade) having saved it first.
+   *
+   * Only doing this when `ctx.issuer` is set and CIMD is confirmed keeps the CIMD-unsupported
+   * diagnostic intact: an AS that never advertised `client_id_metadata_document_supported`
+   * still gets `undefined` here, so the SDK's own DCR-gate error still fires.
+   */
   async clientInformation(ctx?: OAuthClientInformationContext): Promise<StoredOAuthClientInformation | undefined> {
-    return this.recordStore.getClientInformation(this.resource, ctx?.issuer);
+    const stored = await this.recordStore.getClientInformation(this.resource, ctx?.issuer);
+    if (stored !== undefined) return stored;
+    if (ctx?.issuer === undefined) return undefined;
+    const discovery = await this.recordStore.getDiscoveryState(this.resource);
+    const supportsCimd =
+      (discovery?.authorizationServerMetadata as { client_id_metadata_document_supported?: boolean } | undefined)
+        ?.client_id_metadata_document_supported === true;
+    if (!supportsCimd) return undefined;
+    return { client_id: this.clientMetadataUrl, issuer: ctx.issuer };
   }
 
   // Intentionally no `saveClientInformation` -- see the class doc comment.
